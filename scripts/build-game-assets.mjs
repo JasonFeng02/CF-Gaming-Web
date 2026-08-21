@@ -8,6 +8,13 @@ const assets = [
   "fish-small",
   "fish-mid",
   "fish-danger",
+  "fish-tier-1",
+  "fish-tier-2",
+  "fish-tier-3",
+  "fish-tier-4",
+  "fish-tier-5",
+  "fish-tier-6",
+  "fish-tier-7",
   "bubble",
 ];
 

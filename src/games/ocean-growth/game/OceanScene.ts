@@ -1,15 +1,20 @@
 import Phaser from "phaser";
 import {
   CLASSIC_GOAL_MASS,
+  EVOLUTION_STAGES,
   INITIAL_PLAYER_MASS,
   RUSH_GOAL_MASS,
   canEat,
   difficultyForSeconds,
+  evolutionStageForLevel,
+  evolutionStageForMass,
   isDangerous,
   massAfterEating,
-  pickEnemyMass,
+  massForLevel,
+  pickEnemyLevel,
   pointsForPrey,
   scaleForMass,
+  stageProgressForMass,
 } from "../core/rules";
 import type {
   OceanGameHooks,
@@ -21,16 +26,23 @@ import type {
 export const OCEAN_SCENE_KEY = "OceanGrowthScene";
 
 const ASSET_ROOT = "/assets/ocean-growth";
-const COMBO_WINDOW_MS = 2_500;
-const PLAYER_SPEED = 380;
+const BACKGROUND_TEXTURE = "ocean-current-pattern";
+const CHUNK_SIZE = 720;
+const CHUNK_RADIUS = 2;
+const COMBO_WINDOW_MS = 2_700;
+const PLAYER_SPEED = 285;
+const RUSH_DURATION_SECONDS = 90;
 
 type EnemyFish = Phaser.Physics.Arcade.Image;
+type FishRelationship = "prey" | "neutral" | "danger";
 
 export class OceanScene extends Phaser.Scene {
   private readonly hooks: OceanGameHooks;
   private readonly mode: OceanGameMode;
   private player!: Phaser.Physics.Arcade.Image;
+  private playerAura!: Phaser.GameObjects.Ellipse;
   private fishGroup!: Phaser.Physics.Arcade.Group;
+  private background!: Phaser.GameObjects.TileSprite;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
   private target = new Phaser.Math.Vector2();
@@ -45,6 +57,11 @@ export class OceanScene extends Phaser.Scene {
   private lastEatAt = 0;
   private invulnerableUntil = 0;
   private lastSecond = -1;
+  private nextSpawnAt = 0;
+  private schoolId = 0;
+  private lastChunkX = Number.NaN;
+  private lastChunkY = Number.NaN;
+  private readonly chunks = new Map<string, Phaser.GameObjects.Graphics>();
 
   constructor(mode: OceanGameMode, hooks: OceanGameHooks) {
     super({ key: OCEAN_SCENE_KEY });
@@ -53,42 +70,47 @@ export class OceanScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image("fish-player", `${ASSET_ROOT}/fish-player.png`);
-    this.load.image("fish-small", `${ASSET_ROOT}/fish-small.png`);
-    this.load.image("fish-mid", `${ASSET_ROOT}/fish-mid.png`);
-    this.load.image("fish-danger", `${ASSET_ROOT}/fish-danger.png`);
+    for (const stage of EVOLUTION_STAGES) {
+      this.load.image(stage.texture, `${ASSET_ROOT}/${stage.texture}.png`);
+    }
     this.load.image("bubble", `${ASSET_ROOT}/bubble.png`);
   }
 
   create() {
-    this.mass = INITIAL_PLAYER_MASS;
-    this.score = 0;
-    this.lives = this.mode === "rush" ? 2 : 3;
-    this.combo = 0;
-    this.status = "running";
-    this.startedAt = this.time.now;
-    this.lastEatAt = 0;
-    this.lastSecond = -1;
-    this.pointerActive = false;
+    this.resetRunState();
+    this.createBackgroundTexture();
 
     const { width, height } = this.scale;
-    this.physics.world.setBounds(0, 0, width, height);
-    this.target.set(width / 2, height / 2);
-
-    this.createAmbientBubbles();
+    this.physics.world.setBounds(-1_000_000, -1_000_000, 2_000_000, 2_000_000);
+    this.background = this.add
+      .tileSprite(0, 0, width, height, BACKGROUND_TEXTURE)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(-100);
 
     this.fishGroup = this.physics.add.group();
+    const initialStage = evolutionStageForMass(this.mass);
+    this.playerAura = this.add
+      .ellipse(0, 0, 96, 58, 0xd9f45c, 0.05)
+      .setStrokeStyle(2, 0xd9f45c, 0.7)
+      .setDepth(8);
     this.player = this.physics.add
-      .image(width / 2, height / 2, "fish-player")
+      .image(0, 0, initialStage.texture)
       .setDepth(10)
-      .setScale(scaleForMass(this.mass))
-      .setCollideWorldBounds(true);
+      .setScale(initialStage.renderScale);
     this.configureBody(this.player);
+    this.syncPlayerAura();
 
-    const startingFish = this.mode === "rush" ? 18 : 15;
-    for (let index = 0; index < startingFish; index += 1) {
-      this.spawnEnemy(true);
-    }
+    this.cameras.main
+      .startFollow(this.player, true, 0.075, 0.075)
+      .setDeadzone(Math.min(170, width * 0.28), Math.min(110, height * 0.22))
+      .setRoundPixels(true);
+    this.target.set(0, 0);
+
+    this.syncWorldChunks(true);
+    this.spawnSchool(true, Math.max(1, initialStage.level - 1));
+    this.spawnSchool(true, initialStage.level);
+    this.spawnSchool(true, Math.min(EVOLUTION_STAGES.length, initialStage.level + 1));
 
     this.physics.add.overlap(
       this.player,
@@ -100,12 +122,12 @@ export class OceanScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard?.createCursorKeys();
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as typeof this.wasd;
-
     this.input.on("pointermove", this.handlePointer, this);
     this.input.on("pointerdown", this.handlePointer, this);
     this.scale.on("resize", this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off("resize", this.handleResize, this);
+      this.chunks.clear();
     });
 
     const snapshot = this.getSnapshot();
@@ -118,6 +140,8 @@ export class OceanScene extends Phaser.Scene {
 
     this.updatePlayer(time);
     this.updateEnemies(delta);
+    this.updateWorldView();
+    this.updateSpawning(time);
     this.updateClock(time);
 
     if (this.combo > 0 && time - this.lastEatAt > COMBO_WINDOW_MS) {
@@ -140,8 +164,40 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private resetRunState() {
+    this.mass = INITIAL_PLAYER_MASS;
+    this.score = 0;
+    this.lives = this.mode === "rush" ? 2 : 3;
+    this.combo = 0;
+    this.status = "running";
+    this.startedAt = this.time.now;
+    this.lastEatAt = 0;
+    this.lastSecond = -1;
+    this.nextSpawnAt = this.time.now + 900;
+    this.pointerActive = false;
+    this.schoolId = 0;
+    this.lastChunkX = Number.NaN;
+    this.lastChunkY = Number.NaN;
+    this.chunks.clear();
+  }
+
+  private createBackgroundTexture() {
+    if (this.textures.exists(BACKGROUND_TEXTURE)) return;
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+    graphics.fillStyle(0x0b6d84, 1).fillRect(0, 0, 512, 512);
+    graphics.fillStyle(0x1591a2, 0.16).fillTriangle(0, 0, 180, 0, 62, 512);
+    graphics.fillStyle(0x72cfca, 0.08).fillTriangle(250, 0, 410, 0, 345, 512);
+    graphics.lineStyle(2, 0xb9eee3, 0.08);
+    for (let index = 0; index < 7; index += 1) {
+      graphics.strokeCircle(46 + index * 73, 78 + (index % 3) * 132, 12 + (index % 2) * 5);
+    }
+    graphics.generateTexture(BACKGROUND_TEXTURE, 512, 512);
+    graphics.destroy();
+  }
+
   private handlePointer(pointer: Phaser.Input.Pointer) {
-    this.target.set(pointer.x, pointer.y);
+    this.target.set(pointer.worldX, pointer.worldY);
     this.pointerActive = true;
     this.lastPointerAt = this.time.now;
   }
@@ -159,44 +215,76 @@ export class OceanScene extends Phaser.Scene {
     if (keyboardDirection.lengthSq() > 0) {
       desired.copy(keyboardDirection).normalize().scale(PLAYER_SPEED);
       this.pointerActive = false;
-    } else if (this.pointerActive && time - this.lastPointerAt < 4_000) {
+    } else if (this.pointerActive && time - this.lastPointerAt < 4_500) {
       desired.set(this.target.x - this.player.x, this.target.y - this.player.y);
       const distance = desired.length();
-      if (distance > 12) {
-        desired.normalize().scale(Math.min(PLAYER_SPEED, distance * 3.2));
+      if (distance > 14) {
+        desired.normalize().scale(Math.min(PLAYER_SPEED, distance * 2.6));
       } else {
         desired.set(0, 0);
       }
     }
 
-    body.velocity.lerp(desired, 0.12);
+    body.velocity.lerp(desired, 0.11);
     if (Math.abs(body.velocity.x) > 8) {
       this.player.setFlipX(body.velocity.x < 0);
     }
-    this.player.setRotation(Phaser.Math.Clamp(body.velocity.y / 1_800, -0.2, 0.2));
+    this.player.setRotation(Phaser.Math.Clamp(body.velocity.y / 1_600, -0.18, 0.18));
+    this.syncPlayerAura();
   }
 
   private updateEnemies(delta: number) {
     const seconds = delta / 1_000;
-    const width = this.scale.width;
-    const height = this.scale.height;
+    const despawnDistance = Math.hypot(this.scale.width / 2, this.scale.height / 2) + 320;
 
-    for (const child of this.fishGroup.getChildren()) {
+    for (const child of [...this.fishGroup.getChildren()]) {
       const enemy = child as EnemyFish;
-      const direction = enemy.getData("direction") as number;
+      if (!enemy.active) continue;
+
+      const marker = enemy.getData("marker") as Phaser.GameObjects.Arc;
+      const relationship = enemy.getData("relationship") as FishRelationship;
       const speed = enemy.getData("speed") as number;
-      const phase = (enemy.getData("phase") as number) + seconds * 1.7;
-      const baseY = enemy.getData("baseY") as number;
+      const phase = (enemy.getData("phase") as number) + seconds * 1.55;
+      const heading = new Phaser.Math.Vector2(
+        enemy.getData("headingX") as number,
+        enemy.getData("headingY") as number,
+      );
+      const toPlayer = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
+      const playerDistance = toPlayer.length();
 
-      enemy.setData("phase", phase);
-      enemy.x += direction * speed * seconds;
-      enemy.y = Phaser.Math.Clamp(baseY + Math.sin(phase) * 17, 68, height - 58);
+      if (relationship === "prey" && playerDistance < 210) {
+        heading.lerp(toPlayer.normalize().negate(), 0.035).normalize();
+      }
 
-      if ((direction > 0 && enemy.x > width + 230) || (direction < 0 && enemy.x < -230)) {
-        enemy.destroy();
-        this.spawnEnemy(false);
+      enemy.setData({ headingX: heading.x, headingY: heading.y, phase });
+      enemy.x += heading.x * speed * seconds;
+      enemy.y += (heading.y * speed + Math.sin(phase) * 18) * seconds;
+      enemy.setFlipX(heading.x < 0);
+      enemy.setRotation(Phaser.Math.Clamp(heading.y * 0.22, -0.2, 0.2));
+      marker.setPosition(enemy.x, enemy.y - enemy.displayHeight * 0.58 - 7);
+
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) > despawnDistance) {
+        this.removeEnemy(enemy);
       }
     }
+  }
+
+  private updateWorldView() {
+    const camera = this.cameras.main;
+    this.background.tilePositionX = camera.scrollX * 0.18;
+    this.background.tilePositionY = camera.scrollY * 0.12;
+    this.syncWorldChunks(false);
+  }
+
+  private updateSpawning(time: number) {
+    if (time < this.nextSpawnAt) return;
+
+    if (this.fishGroup.countActive(true) < this.maxActiveFish) {
+      this.spawnSchool(false);
+    }
+
+    const difficulty = difficultyForSeconds((time - this.startedAt) / 1_000);
+    this.nextSpawnAt = time + Phaser.Math.Between(1_050, Math.round(1_750 - difficulty * 300));
   }
 
   private updateClock(time: number) {
@@ -204,7 +292,7 @@ export class OceanScene extends Phaser.Scene {
     if (elapsed === this.lastSecond) return;
     this.lastSecond = elapsed;
 
-    if (this.mode === "rush" && elapsed >= 75) {
+    if (this.mode === "rush" && elapsed >= RUSH_DURATION_SECONDS) {
       this.finish("gameover");
       return;
     }
@@ -212,52 +300,144 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
-  private spawnEnemy(initial: boolean) {
-    if (!this.fishGroup) return;
+  private spawnSchool(initial: boolean, forcedLevel?: number) {
+    if (!this.fishGroup || this.fishGroup.countActive(true) >= this.maxActiveFish) return;
 
-    const playerMass = this.mass;
-    const enemyMass = pickEnemyMass(playerMass);
-    const direction = Math.random() > 0.5 ? 1 : -1;
-    const width = this.scale.width;
-    const height = this.scale.height;
-    const maxAvailableSafeZone = Math.max(60, width / 2 - 40);
-    const safeZone = Math.min(250, Math.max(150, width * 0.24), maxAvailableSafeZone);
-    const initialX = Math.random() > 0.5
-      ? Phaser.Math.Between(40, Math.max(41, Math.floor(width / 2 - safeZone)))
-      : Phaser.Math.Between(
-          Math.min(width - 41, Math.ceil(width / 2 + safeZone)),
-          Math.max(41, width - 40),
-        );
-    const x = initial ? initialX : direction > 0 ? -190 : width + 190;
-    const baseY = Phaser.Math.Between(75, Math.max(76, height - 70));
-    const elapsed = Math.max(0, (this.time.now - this.startedAt) / 1_000);
-    const difficulty = difficultyForSeconds(elapsed);
-    const speedMultiplier = this.mode === "rush" ? 1.22 : 1;
-    const speed = (82 + Math.random() * 82 + difficulty * 95) * speedMultiplier;
-    const texture = canEat(playerMass, enemyMass)
-      ? "fish-small"
-      : isDangerous(playerMass, enemyMass)
-        ? "fish-danger"
-        : "fish-mid";
+    const playerStage = evolutionStageForMass(this.mass);
+    const enemyLevel = forcedLevel ?? pickEnemyLevel(playerStage.level);
+    const relationship = this.relationshipForLevel(enemyLevel);
+    const remaining = this.maxActiveFish - this.fishGroup.countActive(true);
+    const schoolSize = Math.min(
+      remaining,
+      relationship === "prey" ? Phaser.Math.Between(2, 3) : 1,
+    );
+    const placement = initial ? this.pickInitialSchoolPosition() : this.pickIncomingSchoolPosition();
+    const school = ++this.schoolId;
 
-    const enemy = this.fishGroup.create(x, baseY, texture) as EnemyFish;
+    for (let index = 0; index < schoolSize; index += 1) {
+      this.spawnEnemy(
+        placement.x + Phaser.Math.Between(-48, 48),
+        placement.y + Phaser.Math.Between(-38, 38),
+        enemyLevel,
+        placement.direction + Phaser.Math.FloatBetween(-0.08, 0.08),
+        school,
+      );
+    }
+  }
+
+  private pickInitialSchoolPosition() {
+    const radiusX = Math.max(155, this.scale.width * 0.3);
+    const radiusY = Math.max(175, this.scale.height * 0.32);
+    const angle = (this.schoolId / 3) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.22, 0.22);
+    return {
+      x: this.player.x + Math.cos(angle) * radiusX,
+      y: this.player.y + Math.sin(angle) * radiusY,
+      direction: Phaser.Math.Angle.Between(
+        0,
+        0,
+        -Math.sin(angle) * radiusX,
+        Math.cos(angle) * radiusY,
+      ) + Phaser.Math.FloatBetween(-0.12, 0.12),
+    };
+  }
+
+  private pickIncomingSchoolPosition() {
+    const halfWidth = this.scale.width / 2;
+    const halfHeight = this.scale.height / 2;
+    const margin = 135;
+    const side = Phaser.Math.Between(0, 3);
+    let x: number;
+    let y: number;
+
+    if (side === 0 || side === 1) {
+      x = this.player.x + (side === 0 ? -halfWidth - margin : halfWidth + margin);
+      y = this.player.y + Phaser.Math.FloatBetween(-halfHeight * 0.72, halfHeight * 0.72);
+    } else {
+      x = this.player.x + Phaser.Math.FloatBetween(-halfWidth * 0.72, halfWidth * 0.72);
+      y = this.player.y + (side === 2 ? -halfHeight - margin : halfHeight + margin);
+    }
+
+    const passByX = this.player.x + Phaser.Math.FloatBetween(-halfWidth * 0.34, halfWidth * 0.34);
+    const passByY = this.player.y + Phaser.Math.FloatBetween(-halfHeight * 0.32, halfHeight * 0.32);
+    return {
+      x,
+      y,
+      direction: Phaser.Math.Angle.Between(x, y, passByX, passByY),
+    };
+  }
+
+  private spawnEnemy(
+    x: number,
+    y: number,
+    level: number,
+    directionAngle: number,
+    school: number,
+  ) {
+    const stage = evolutionStageForLevel(level);
+    const enemyMass = massForLevel(level);
+    const relationship = this.relationshipForLevel(level);
+    const difficulty = difficultyForSeconds((this.time.now - this.startedAt) / 1_000);
+    const speedMultiplier = this.mode === "rush" ? 1.14 : 1;
+    const baseSpeed = relationship === "danger" ? 104 : relationship === "prey" ? 84 : 92;
+    const speed = (baseSpeed + Math.random() * 34 + difficulty * 38) * speedMultiplier;
+    const enemy = this.fishGroup.create(x, y, stage.texture) as EnemyFish;
+    const marker = this.createRelationshipMarker(x, y, relationship);
+
     enemy
-      .setScale(scaleForMass(enemyMass))
-      .setFlipX(direction < 0)
+      .setScale(stage.renderScale * Phaser.Math.FloatBetween(0.97, 1.03))
+      .setFlipX(Math.cos(directionAngle) < 0)
       .setData({
         mass: enemyMass,
-        direction,
+        level,
+        relationship,
+        headingX: Math.cos(directionAngle),
+        headingY: Math.sin(directionAngle) * 0.38,
         speed,
-        baseY,
         phase: Math.random() * Math.PI * 2,
         consumed: false,
+        retreatUntil: 0,
+        marker,
+        school,
       });
     this.configureBody(enemy);
   }
 
+  private createRelationshipMarker(x: number, y: number, relationship: FishRelationship) {
+    const marker = this.add.circle(x, y, relationship === "danger" ? 4 : 3).setDepth(9);
+    this.styleRelationshipMarker(marker, relationship);
+    return marker;
+  }
+
+  private styleRelationshipMarker(marker: Phaser.GameObjects.Arc, relationship: FishRelationship) {
+    if (relationship === "prey") {
+      marker.setFillStyle(0xd9f45c, 0.9).setStrokeStyle();
+    } else if (relationship === "danger") {
+      marker.setFillStyle(0xff765e, 0.95).setStrokeStyle(2, 0xffffff, 0.5);
+    } else {
+      marker.setFillStyle(0xffffff, 0).setStrokeStyle(1, 0xffffff, 0.52);
+    }
+  }
+
+  private relationshipForLevel(level: number): FishRelationship {
+    const playerLevel = evolutionStageForMass(this.mass).level;
+    if (level < playerLevel) return "prey";
+    if (level > playerLevel) return "danger";
+    return "neutral";
+  }
+
+  private refreshRelationships() {
+    for (const child of this.fishGroup.getChildren()) {
+      const enemy = child as EnemyFish;
+      const relationship = this.relationshipForLevel(enemy.getData("level") as number);
+      const marker = enemy.getData("marker") as Phaser.GameObjects.Arc;
+      enemy.setData("relationship", relationship);
+      this.styleRelationshipMarker(marker, relationship);
+    }
+  }
+
   private configureBody(fish: Phaser.Physics.Arcade.Image) {
     const body = fish.body as Phaser.Physics.Arcade.Body;
-    body.setSize(fish.width * 0.68, fish.height * 0.58, true);
+    body.setSize(fish.width * 0.68, fish.height * 0.52, true);
   }
 
   private handleOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
@@ -275,58 +455,114 @@ export class OceanScene extends Phaser.Scene {
     }
 
     if (isDangerous(this.mass, enemyMass)) {
+      if (this.time.now < ((enemy.getData("retreatUntil") as number | undefined) ?? 0)) {
+        return;
+      }
       this.takeDamage(enemy);
       return;
     }
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.velocity.scale(-0.6);
+    const away = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y)
+      .normalize()
+      .scale(170);
+    body.velocity.add(away);
   };
 
   private consumeEnemy(enemy: EnemyFish, enemyMass: number) {
     const x = enemy.x;
     const y = enemy.y;
-    enemy.disableBody(true, true);
+    const previousStage = evolutionStageForMass(this.mass);
+    this.removeEnemy(enemy, true);
     this.combo = this.time.now - this.lastEatAt <= COMBO_WINDOW_MS ? this.combo + 1 : 1;
     this.lastEatAt = this.time.now;
     this.score += pointsForPrey(enemyMass, this.combo);
     this.mass = massAfterEating(this.mass, enemyMass);
     this.createEatBurst(x, y);
 
-    const nextScale = scaleForMass(this.mass);
-    this.tweens.add({
-      targets: this.player,
-      scaleX: nextScale,
-      scaleY: nextScale,
-      duration: 180,
-      ease: "Back.Out",
-    });
+    const nextStage = evolutionStageForMass(this.mass);
+    if (nextStage.level !== previousStage.level) {
+      this.evolvePlayer(nextStage);
+    } else {
+      this.tweens.add({
+        targets: this.player,
+        scaleX: scaleForMass(this.mass) * 1.08,
+        scaleY: scaleForMass(this.mass) * 0.94,
+        yoyo: true,
+        duration: 110,
+        ease: "Sine.Out",
+      });
+    }
 
     if (this.mass >= this.goalMass) {
       this.finish("won");
       return;
     }
 
-    this.time.delayedCall(240, () => this.spawnEnemy(false));
+    this.nextSpawnAt = Math.min(this.nextSpawnAt, this.time.now + 650);
     this.emitSnapshot();
+  }
+
+  private evolvePlayer(stage: (typeof EVOLUTION_STAGES)[number]) {
+    this.player.setTexture(stage.texture).setScale(stage.renderScale);
+    this.configureBody(this.player);
+    this.refreshRelationships();
+    this.syncPlayerAura();
+    this.cameras.main.flash(260, 217, 244, 92);
+    this.cameras.main.zoomTo(1.045, 150, "Sine.Out", false, (_camera, progress) => {
+      if (progress === 1) this.cameras.main.zoomTo(1, 260, "Sine.InOut");
+    });
+
+    const label = this.add
+      .text(this.player.x, this.player.y - 62, `进化 · ${stage.name}`, {
+        color: "#f4ffb1",
+        fontFamily: '"Noto Sans SC", sans-serif',
+        fontSize: "18px",
+        fontStyle: "bold",
+        stroke: "#0a252c",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(30);
+    this.tweens.add({
+      targets: label,
+      y: label.y - 34,
+      alpha: 0,
+      duration: 1_250,
+      ease: "Cubic.Out",
+      onComplete: () => label.destroy(),
+    });
   }
 
   private takeDamage(enemy: EnemyFish) {
     if (this.time.now < this.invulnerableUntil) return;
-    this.invulnerableUntil = this.time.now + 1_500;
+    this.invulnerableUntil = this.time.now + 1_850;
     this.lives -= 1;
-    this.cameras.main.shake(220, 0.014);
+    this.cameras.main.shake(200, 0.012);
     this.player.setTint(0xff8c7c);
     this.tweens.add({
-      targets: this.player,
-      alpha: 0.32,
+      targets: [this.player, this.playerAura],
+      alpha: 0.3,
       yoyo: true,
       repeat: 4,
-      duration: 120,
-      onComplete: () => this.player.clearTint().setAlpha(1),
+      duration: 105,
+      onComplete: () => {
+        this.player.clearTint().setAlpha(1);
+        this.playerAura.setAlpha(1);
+      },
     });
 
-    enemy.setData("direction", -(enemy.getData("direction") as number));
+    const enemyRetreat = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y)
+      .normalize();
+    enemy.setData({
+      headingX: enemyRetreat.x,
+      headingY: enemyRetreat.y,
+      retreatUntil: this.time.now + 4_500,
+    });
+    enemy.x += enemyRetreat.x * 42;
+    enemy.y += enemyRetreat.y * 42;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.velocity.set(this.player.x - enemy.x, this.player.y - enemy.y).normalize().scale(260);
 
     if (this.lives <= 0) {
       this.finish("gameover");
@@ -336,54 +572,114 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private removeEnemy(enemy: EnemyFish, hide = false) {
+    const marker = enemy.getData("marker") as Phaser.GameObjects.Arc | undefined;
+    marker?.destroy();
+    enemy.setData("marker", undefined);
+    if (hide) enemy.disableBody(true, true);
+    enemy.destroy();
+  }
+
   private createEatBurst(x: number, y: number) {
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const bubble = this.add
         .image(x, y, "bubble")
         .setDepth(20)
-        .setScale(0.25 + Math.random() * 0.28)
-        .setAlpha(0.8);
+        .setScale(0.16 + Math.random() * 0.2)
+        .setAlpha(0.72);
       this.tweens.add({
         targets: bubble,
-        x: x + Phaser.Math.Between(-55, 55),
-        y: y - Phaser.Math.Between(30, 95),
+        x: x + Phaser.Math.Between(-42, 42),
+        y: y - Phaser.Math.Between(28, 76),
         alpha: 0,
-        duration: 500 + Math.random() * 300,
+        duration: 440 + Math.random() * 260,
         onComplete: () => bubble.destroy(),
       });
     }
   }
 
-  private createAmbientBubbles() {
-    for (let index = 0; index < 12; index += 1) {
-      const bubble = this.add
-        .image(
-          Phaser.Math.Between(20, Math.max(21, this.scale.width - 20)),
-          Phaser.Math.Between(30, Math.max(31, this.scale.height - 30)),
-          "bubble",
-        )
-        .setDepth(1)
-        .setScale(0.18 + Math.random() * 0.5)
-        .setAlpha(0.25 + Math.random() * 0.28);
-      this.tweens.add({
-        targets: bubble,
-        y: -60,
-        duration: 5_000 + Math.random() * 6_000,
-        repeat: -1,
-        delay: Math.random() * 4_000,
-        onRepeat: () => {
-          bubble.x = Phaser.Math.Between(20, Math.max(21, this.scale.width - 20));
-          bubble.y = this.scale.height + 40;
-        },
-      });
+  private syncPlayerAura() {
+    if (!this.playerAura || !this.player) return;
+    this.playerAura
+      .setPosition(this.player.x, this.player.y)
+      .setRotation(this.player.rotation)
+      .setDisplaySize(this.player.displayWidth * 1.38, this.player.displayHeight * 1.48);
+  }
+
+  private syncWorldChunks(force: boolean) {
+    const chunkX = Math.floor(this.player.x / CHUNK_SIZE);
+    const chunkY = Math.floor(this.player.y / CHUNK_SIZE);
+    if (!force && chunkX === this.lastChunkX && chunkY === this.lastChunkY) return;
+    this.lastChunkX = chunkX;
+    this.lastChunkY = chunkY;
+
+    const expected = new Set<string>();
+    for (let offsetY = -CHUNK_RADIUS; offsetY <= CHUNK_RADIUS; offsetY += 1) {
+      for (let offsetX = -CHUNK_RADIUS; offsetX <= CHUNK_RADIUS; offsetX += 1) {
+        const targetX = chunkX + offsetX;
+        const targetY = chunkY + offsetY;
+        const key = `${targetX}:${targetY}`;
+        expected.add(key);
+        if (!this.chunks.has(key)) {
+          this.chunks.set(key, this.createWorldChunk(targetX, targetY));
+        }
+      }
+    }
+
+    for (const [key, chunk] of this.chunks) {
+      if (!expected.has(key)) {
+        chunk.destroy();
+        this.chunks.delete(key);
+      }
     }
   }
 
+  private createWorldChunk(chunkX: number, chunkY: number) {
+    const random = this.seededRandom(chunkX, chunkY);
+    const graphics = this.add
+      .graphics()
+      .setPosition(chunkX * CHUNK_SIZE, chunkY * CHUNK_SIZE)
+      .setDepth(-20);
+
+    graphics.lineStyle(2, 0xb9eee3, 0.16);
+    for (let index = 0; index < 9; index += 1) {
+      const x = random() * CHUNK_SIZE;
+      const y = random() * CHUNK_SIZE;
+      const radius = 3 + random() * 8;
+      graphics.strokeCircle(x, y, radius);
+    }
+
+    const reefCount = 1 + Math.floor(random() * 3);
+    for (let reef = 0; reef < reefCount; reef += 1) {
+      const x = 70 + random() * (CHUNK_SIZE - 140);
+      const y = 90 + random() * (CHUNK_SIZE - 180);
+      graphics.fillStyle(0x074e61, 0.26);
+      graphics.fillEllipse(x, y + 22, 100 + random() * 90, 42 + random() * 28);
+      graphics.fillStyle(0x68c3b0, 0.2);
+      for (let frond = 0; frond < 4; frond += 1) {
+        const frondX = x - 34 + frond * 23 + random() * 8;
+        const height = 34 + random() * 58;
+        graphics.fillTriangle(frondX - 8, y + 12, frondX + 7, y + 12, frondX, y - height);
+      }
+      graphics.fillStyle(0xff765e, 0.18);
+      graphics.fillCircle(x + 24, y - 4, 8 + random() * 8);
+    }
+    return graphics;
+  }
+
+  private seededRandom(chunkX: number, chunkY: number) {
+    let seed = (Math.imul(chunkX, 374_761_393) ^ Math.imul(chunkY, 668_265_263)) >>> 0;
+    return () => {
+      seed = Math.imul(seed ^ (seed >>> 13), 1_274_126_177) >>> 0;
+      return seed / 4_294_967_295;
+    };
+  }
+
   private handleResize(gameSize: Phaser.Structs.Size) {
-    this.physics.world.setBounds(0, 0, gameSize.width, gameSize.height);
-    this.player.setPosition(
-      Phaser.Math.Clamp(this.player.x, 30, gameSize.width - 30),
-      Phaser.Math.Clamp(this.player.y, 30, gameSize.height - 30),
+    this.background?.setSize(gameSize.width, gameSize.height);
+    this.cameras.main.setDeadzone(
+      Math.min(170, gameSize.width * 0.28),
+      Math.min(110, gameSize.height * 0.22),
     );
   }
 
@@ -394,19 +690,28 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private get maxActiveFish() {
+    const base = this.scale.width < 620 ? 7 : 9;
+    return this.mode === "rush" ? base + 2 : base;
+  }
+
   private get goalMass() {
     return this.mode === "rush" ? RUSH_GOAL_MASS : CLASSIC_GOAL_MASS;
   }
 
   private getSnapshot(): OceanSnapshot {
     const elapsed = Math.max(0, Math.floor((this.time.now - this.startedAt) / 1_000));
+    const stage = evolutionStageForMass(this.mass);
     return {
       score: this.score,
       mass: this.mass,
       goalMass: this.goalMass,
+      level: stage.level,
+      species: stage.name,
+      stageProgress: stageProgressForMass(this.mass),
       lives: this.lives,
       combo: this.combo,
-      timeLeft: this.mode === "rush" ? Math.max(0, 75 - elapsed) : null,
+      timeLeft: this.mode === "rush" ? Math.max(0, RUSH_DURATION_SECONDS - elapsed) : null,
       status: this.status,
     };
   }

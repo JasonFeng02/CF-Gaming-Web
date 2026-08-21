@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { INITIAL_PLAYER_MASS } from "./core/rules";
+import {
+  CLASSIC_GOAL_MASS,
+  EVOLUTION_STAGES,
+  INITIAL_PLAYER_MASS,
+  evolutionStageForMass,
+} from "./core/rules";
 import { createOceanGame } from "./game/createOceanGame";
 import type {
   OceanGameController,
@@ -16,10 +21,14 @@ import type {
   OceanSnapshot,
 } from "./game/types";
 
+const initialStage = evolutionStageForMass(INITIAL_PLAYER_MASS);
 const initialSnapshot: OceanSnapshot = {
   score: 0,
   mass: INITIAL_PLAYER_MASS,
-  goalMass: 105,
+  goalMass: CLASSIC_GOAL_MASS,
+  level: initialStage.level,
+  species: initialStage.name,
+  stageProgress: 0,
   lives: 3,
   combo: 0,
   timeLeft: null,
@@ -82,22 +91,16 @@ export function OceanGrowthPage() {
     [],
   );
 
-  const progress = Math.min(100, (snapshot.mass / snapshot.goalMass) * 100);
   const isFinished = snapshot.status === "won" || snapshot.status === "gameover";
+  const evolutionStages = mode === "rush" ? EVOLUTION_STAGES.slice(0, 5) : EVOLUTION_STAGES;
+  const overallProgress = Math.min(
+    100,
+    ((snapshot.level - 1 + snapshot.stageProgress) / (evolutionStages.length - 1)) * 100,
+  );
+  const currentTexture = EVOLUTION_STAGES[snapshot.level - 1]?.texture ?? initialStage.texture;
 
   return (
     <main className="game-page">
-      <div className="game-page-heading page-width">
-        <Link to="/" className="back-link">
-          <ArrowLeft aria-hidden="true" size={17} />
-          游戏库
-        </Link>
-        <div>
-          <p className="eyebrow">SURVIVAL / 01</p>
-          <h1>深海进化</h1>
-        </div>
-      </div>
-
       <section
         ref={stageRef}
         className="game-stage"
@@ -105,36 +108,71 @@ export function OceanGrowthPage() {
       >
         <div ref={canvasHostRef} className="game-canvas-host" />
 
+        <div className="stage-meta">
+          <Link to="/" className="stage-back-link" aria-label="返回游戏库" title="返回游戏库">
+            <ArrowLeft aria-hidden="true" size={18} />
+          </Link>
+          <div>
+            <span>OCEAN RUN</span>
+            <strong>深海进化</strong>
+          </div>
+        </div>
+
         {hasStarted && (
           <div className="game-hud">
-            <div className="hud-stats" aria-live="polite">
-              <div className="hud-stat">
+            <div className="hud-vitals" aria-live="polite">
+              <img
+                src={`/assets/ocean-growth/${currentTexture}.png`}
+                alt=""
+                aria-hidden="true"
+              />
+              <div className="hud-identity">
+                <span>LV.{snapshot.level}</span>
+                <strong>{snapshot.species}</strong>
+              </div>
+              <div className="hud-score">
                 <span>得分</span>
                 <strong>{snapshot.score.toLocaleString("zh-CN")}</strong>
-              </div>
-              <div className="hud-stat hud-growth">
-                <span>进化</span>
-                <strong>{Math.round(progress)}%</strong>
-                <i aria-hidden="true">
-                  <b style={{ width: `${progress}%` }} />
-                </i>
               </div>
               <div className="hud-lives" aria-label={`剩余 ${snapshot.lives} 点生命`}>
                 {Array.from({ length: mode === "rush" ? 2 : 3 }).map((_, index) => (
                   <Heart
                     key={index}
                     aria-hidden="true"
-                    size={18}
+                    size={17}
                     fill={index < snapshot.lives ? "currentColor" : "none"}
                   />
                 ))}
               </div>
               {snapshot.timeLeft !== null && (
-                <div className="hud-stat hud-time">
+                <div className="hud-time">
                   <span>剩余</span>
                   <strong>{snapshot.timeLeft}s</strong>
                 </div>
               )}
+            </div>
+
+            <div className="evolution-hud" aria-label={`当前进化等级 ${snapshot.level}`}>
+              <div className="evolution-rail" aria-hidden="true">
+                <i>
+                  <b style={{ width: `${overallProgress}%` }} />
+                </i>
+                {evolutionStages.map((stage) => (
+                  <span
+                    key={stage.level}
+                    className={
+                      stage.level < snapshot.level
+                        ? "complete"
+                        : stage.level === snapshot.level
+                          ? "current"
+                          : ""
+                    }
+                  >
+                    <img src={`/assets/ocean-growth/${stage.texture}.png`} alt="" />
+                  </span>
+                ))}
+              </div>
+              <small>下一形态 {Math.round(snapshot.stageProgress * 100)}%</small>
             </div>
 
             <div className="hud-actions">
@@ -169,8 +207,13 @@ export function OceanGrowthPage() {
 
         {!hasStarted && (
           <div className="game-overlay game-intro-overlay">
-            <p className="overlay-kicker">OCEAN RUN</p>
-            <h2>从浅海游向食物链顶端</h2>
+            <div className="intro-fish-line" aria-hidden="true">
+              {EVOLUTION_STAGES.slice(0, 4).map((stage) => (
+                <img key={stage.level} src={`/assets/ocean-growth/${stage.texture}.png`} alt="" />
+              ))}
+            </div>
+            <p className="overlay-kicker">OPEN WATER / EVOLVE</p>
+            <h1>游向更深的海域</h1>
             <div className="mode-control" aria-label="游戏模式">
               <button
                 type="button"
@@ -186,6 +229,11 @@ export function OceanGrowthPage() {
               >
                 极速
               </button>
+            </div>
+            <div className="encounter-legend" aria-label="鱼群关系标记">
+              <span><i className="prey" />猎物</span>
+              <span><i className="neutral" />同阶</span>
+              <span><i className="danger" />危险</span>
             </div>
             <button type="button" className="game-start-command" onClick={startGame}>
               <Play aria-hidden="true" size={19} fill="currentColor" />
@@ -215,8 +263,14 @@ export function OceanGrowthPage() {
               {snapshot.status === "won" ? "EVOLUTION COMPLETE" : "RUN ENDED"}
             </p>
             <h2>{snapshot.status === "won" ? "进化完成" : "被深海截停"}</h2>
+            <img
+              className="result-fish"
+              src={`/assets/ocean-growth/${currentTexture}.png`}
+              alt=""
+              aria-hidden="true"
+            />
             <strong>{snapshot.score.toLocaleString("zh-CN")}</strong>
-            <span>本轮得分</span>
+            <span>LV.{snapshot.level} · {snapshot.species}</span>
             <button type="button" className="game-start-command" onClick={restartGame}>
               <RotateCcw aria-hidden="true" size={18} />
               再来一局

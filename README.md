@@ -4,11 +4,13 @@
 
 在线体验：[cf-gaming-web.jasonfeng1113.workers.dev](https://cf-gaming-web.jasonfeng1113.workers.dev)
 
-## 当前界面
+## 当前玩法
 
-![桌面端游戏界面](./docs/screenshots/desktop-game.png)
-
-<img src="./docs/screenshots/mobile-game.png" alt="手机端游戏界面" width="390" />
+- 玩家在流式生成的海域中移动，相机平滑跟随，没有可见地图边框
+- 7 种原创鱼类对应 7 个明确等级，进化时同时更换轮廓、配色和体型
+- 低一阶鱼可吞食、同阶鱼会弹开、高阶鱼会造成伤害，关系点提供即时提示
+- 鱼群从视野外围成组进入并在离开后回收，刷新等级最高不超过玩家等级 `+2`
+- 桌面端支持鼠标与 WASD/方向键，移动端支持触摸目标移动
 
 ## 技术栈
 

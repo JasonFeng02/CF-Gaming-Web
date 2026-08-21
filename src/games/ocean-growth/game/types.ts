@@ -5,6 +5,9 @@ export interface OceanSnapshot {
   score: number;
   mass: number;
   goalMass: number;
+  level: number;
+  species: string;
+  stageProgress: number;
   lives: number;
   combo: number;
   timeLeft: number | null;
