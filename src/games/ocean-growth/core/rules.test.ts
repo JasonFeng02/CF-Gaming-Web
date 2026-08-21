@@ -5,23 +5,28 @@ import {
   RUSH_GOAL_MASS,
   canEat,
   abyssThreatForSeconds,
+  depthMetersForWorldY,
+  depthZoneNameForLevel,
   difficultyForSeconds,
   enemyRarityForLevel,
   evolutionStageForMass,
   growthForPrey,
   hasCompletedGrowthGoal,
   isDangerous,
+  isDepthUnsafe,
   levelForMass,
   massAfterEating,
   massForLevel,
   maxMinesForSeconds,
   mineSpawnChanceForSeconds,
   pickEnemyLevel,
+  pickEnemyLevelForDepth,
   pointsForPrey,
   scaleForMass,
   sameLevelPreyRequired,
   stageProgressForMass,
   requiredLevelForSeconds,
+  requiredLevelForDepth,
   threatTierForSeconds,
 } from "./rules";
 
@@ -111,6 +116,45 @@ describe("ocean growth rules", () => {
     expect(stageProgressForMass(72)).toBe(0);
     expect(stageProgressForMass(10_000)).toBe(1);
     expect(difficultyForSeconds(999)).toBe(1);
+  });
+
+  it("makes every evolution visibly larger and the final fish over four times the hatchling", () => {
+    for (let index = 1; index < EVOLUTION_STAGES.length; index += 1) {
+      expect(EVOLUTION_STAGES[index].renderScale).toBeGreaterThan(
+        EVOLUTION_STAGES[index - 1].renderScale,
+      );
+    }
+    expect(EVOLUTION_STAGES.at(-1)?.renderScale ?? 0).toBeGreaterThanOrEqual(
+      EVOLUTION_STAGES[0].renderScale * 4,
+    );
+  });
+
+  it("unlocks fish levels by depth and keeps shallow water free of advanced fish", () => {
+    expect(depthMetersForWorldY(-400)).toBe(0);
+    expect(depthMetersForWorldY(0)).toBe(0);
+    expect(depthMetersForWorldY(480)).toBe(100);
+    expect(requiredLevelForDepth(479)).toBe(1);
+    expect(requiredLevelForDepth(480)).toBe(2);
+    expect(requiredLevelForDepth(99_999)).toBe(EVOLUTION_STAGES.length);
+    expect(pickEnemyLevelForDepth(13, 0, () => 0.999)).toBe(1);
+    expect(pickEnemyLevelForDepth(6, 480 * 4, () => 0.999)).toBe(5);
+    expect(pickEnemyLevelForDepth(6, 480 * 8, () => 0.999)).toBe(8);
+  });
+
+  it("raises the high-level fish rate in deeper water", () => {
+    const sample = (worldY: number) => Array.from({ length: 2_000 }, (_, index) =>
+      pickEnemyLevelForDepth(6, worldY, () => index / 2_000));
+    const upperTierCount = (levels: number[]) => levels.filter((level) => level >= 6).length;
+
+    expect(upperTierCount(sample(480 * 8))).toBeGreaterThan(upperTierCount(sample(480 * 6)));
+  });
+
+  it("marks water as unsafe when its depth requirement exceeds the player level", () => {
+    expect(isDepthUnsafe(1, 479)).toBe(false);
+    expect(isDepthUnsafe(1, 480)).toBe(true);
+    expect(isDepthUnsafe(5, 480 * 4)).toBe(false);
+    expect(depthZoneNameForLevel(1)).toBe("阳光浅海");
+    expect(depthZoneNameForLevel(13)).toBe("深渊层");
   });
 
   it("raises the survival level every 45 seconds and caps it at the final stage", () => {

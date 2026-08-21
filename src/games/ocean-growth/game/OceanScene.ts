@@ -1,12 +1,15 @@
 import Phaser from "phaser";
 import {
   CLASSIC_GOAL_MASS,
+  DEPTH_ZONE_HEIGHT,
   EVOLUTION_STAGES,
   INITIAL_PLAYER_MASS,
   PRESSURE_GRACE_SECONDS,
   RUSH_GOAL_MASS,
   abyssThreatForSeconds,
   canEat,
+  depthMetersForWorldY,
+  depthZoneNameForLevel,
   difficultyForSeconds,
   evolutionStageForLevel,
   evolutionStageForMass,
@@ -16,8 +19,9 @@ import {
   massForLevel,
   maxMinesForSeconds,
   mineSpawnChanceForSeconds,
-  pickEnemyLevel,
+  pickEnemyLevelForDepth,
   pointsForPrey,
+  requiredLevelForDepth,
   requiredLevelForSeconds,
   scaleForMass,
   stageProgressForMass,
@@ -44,6 +48,8 @@ const SONAR_DURATION_MS = 10_000;
 const FRENZY_DURATION_MS = 8_000;
 const BEACON_DURATION_MS = 14_000;
 const CURRENT_GATE_RADIUS = 112;
+const DEPTH_ENTRY_GRACE_MS = 2_000;
+const DEPTH_DAMAGE_INTERVAL_MS = 4_000;
 
 type EnemyFish = Phaser.Physics.Arcade.Image;
 type SeaMine = Phaser.Physics.Arcade.Image;
@@ -65,6 +71,7 @@ export class OceanScene extends Phaser.Scene {
   private beacon: Phaser.GameObjects.Image | null = null;
   private readonly sonarIndicators = new Map<SonarCategory, Phaser.GameObjects.Triangle>();
   private background!: Phaser.GameObjects.TileSprite;
+  private depthShade!: Phaser.GameObjects.Rectangle;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
   private target = new Phaser.Math.Vector2();
@@ -83,6 +90,8 @@ export class OceanScene extends Phaser.Scene {
   private sonarUntil = 0;
   private frenzyUntil = 0;
   private pressureDeadlineAt: number | null = null;
+  private nextDepthDamageAt: number | null = null;
+  private lastDepthLevel = 1;
   private lastEvent: string | null = null;
   private lastEventUntil = 0;
   private lastSecond = -1;
@@ -129,6 +138,11 @@ export class OceanScene extends Phaser.Scene {
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(-100);
+    this.depthShade = this.add
+      .rectangle(0, 0, width, height, 0x03162e, 0)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(5);
 
     this.fishGroup = this.physics.add.group();
     this.mineGroup = this.physics.add.group();
@@ -241,6 +255,8 @@ export class OceanScene extends Phaser.Scene {
     this.sonarUntil = 0;
     this.frenzyUntil = 0;
     this.pressureDeadlineAt = null;
+    this.nextDepthDamageAt = null;
+    this.lastDepthLevel = 1;
     this.lastEvent = null;
     this.lastEventUntil = 0;
     this.lastSecond = -1;
@@ -339,6 +355,14 @@ export class OceanScene extends Phaser.Scene {
       const playerLevel = evolutionStageForMass(this.mass).level;
       let trackingPlayer = false;
 
+      if (enemyLevel > 1) {
+        const shallowBoundary = (enemyLevel - 1) * DEPTH_ZONE_HEIGHT;
+        if (enemy.y < shallowBoundary + 54) {
+          heading.y = Math.max(0.34, Math.abs(heading.y));
+          heading.normalize();
+        }
+      }
+
       if (relationship === "prey" && playerDistance < 210) {
         heading.lerp(toPlayer.normalize().negate(), 0.035).normalize();
       } else if (
@@ -362,6 +386,9 @@ export class OceanScene extends Phaser.Scene {
       const current = this.currentVectorAt(enemy.x, enemy.y);
       enemy.x += (heading.x * speed * dangerSpeed + current.x) * seconds;
       enemy.y += (heading.y * speed * dangerSpeed + Math.sin(phase) * 18 + current.y) * seconds;
+      if (enemyLevel > 1) {
+        enemy.y = Math.max(enemy.y, (enemyLevel - 1) * DEPTH_ZONE_HEIGHT);
+      }
       enemy.setFlipX(heading.x < 0);
       enemy.setRotation(Phaser.Math.Clamp(heading.y * 0.22, -0.2, 0.2));
       marker.setPosition(enemy.x, enemy.y - enemy.displayHeight * 0.58 - 7);
@@ -559,8 +586,16 @@ export class OceanScene extends Phaser.Scene {
 
   private updateWorldView() {
     const camera = this.cameras.main;
+    const depthLevel = requiredLevelForDepth(this.player.y);
+    const depthRatio = (depthLevel - 1) / (EVOLUTION_STAGES.length - 1);
     this.background.tilePositionX = camera.scrollX * 0.18;
     this.background.tilePositionY = camera.scrollY * 0.12;
+    this.background.setTint(Phaser.Display.Color.GetColor(
+      Math.round(255 - depthRatio * 125),
+      Math.round(255 - depthRatio * 105),
+      Math.round(255 - depthRatio * 55),
+    ));
+    this.depthShade.setAlpha(depthRatio * 0.38);
     this.syncWorldChunks(false);
   }
 
@@ -614,6 +649,26 @@ export class OceanScene extends Phaser.Scene {
     }
 
     const playerLevel = evolutionStageForMass(this.mass).level;
+    const depthLevel = requiredLevelForDepth(this.player.y);
+    if (depthLevel !== this.lastDepthLevel) {
+      this.lastDepthLevel = depthLevel;
+      this.announce(`进入${depthZoneNameForLevel(depthLevel)} · 安全等级 LV.${depthLevel}`);
+    }
+
+    if (playerLevel < depthLevel) {
+      if (this.nextDepthDamageAt === null) {
+        this.nextDepthDamageAt = time + DEPTH_ENTRY_GRACE_MS;
+        this.announce(`深度超限 · 请上浮或进化至 LV.${depthLevel}`);
+      } else if (time >= this.nextDepthDamageAt) {
+        this.nextDepthDamageAt = time + DEPTH_DAMAGE_INTERVAL_MS;
+        this.takeDepthDamage(depthLevel);
+        if (this.status === "gameover") return;
+      }
+    } else if (this.nextDepthDamageAt !== null) {
+      this.nextDepthDamageAt = null;
+      this.announce("已返回安全水层");
+    }
+
     const requiredLevel = requiredLevelForSeconds(elapsed);
     if (playerLevel < requiredLevel) {
       if (this.pressureDeadlineAt === null) {
@@ -636,18 +691,48 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private takeDepthDamage(depthLevel: number) {
+    this.lives -= 1;
+    this.combo = 0;
+    this.announce(`深水失压 · 需要 LV.${depthLevel} · 生命 -1`);
+    this.cameras.main.shake(180, 0.01);
+    this.cameras.main.flash(160, 45, 132, 190, false);
+    this.player.setTint(0x73cde8);
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.35,
+      yoyo: true,
+      repeat: 3,
+      duration: 120,
+      onComplete: () => this.player.clearTint().setAlpha(1),
+    });
+
+    if (this.lives <= 0) {
+      this.deathCause = "depth";
+      this.finish("gameover");
+    }
+  }
+
   private spawnSchool(initial: boolean, forcedLevel?: number) {
     if (!this.fishGroup || this.fishGroup.countActive(true) >= this.maxActiveFish) return;
 
     const playerStage = evolutionStageForMass(this.mass);
-    const enemyLevel = forcedLevel ?? pickEnemyLevel(playerStage.level);
+    const placement = initial ? this.pickInitialSchoolPosition() : this.pickIncomingSchoolPosition();
+    const maximumLevel = Math.min(
+      requiredLevelForDepth(placement.y),
+      playerStage.level + 2,
+    );
+    const enemyLevel = forcedLevel === undefined
+      ? pickEnemyLevelForDepth(playerStage.level, placement.y)
+      : Phaser.Math.Clamp(forcedLevel, 1, maximumLevel);
     const relationship = this.relationshipForLevel(enemyLevel);
     const remaining = this.maxActiveFish - this.fishGroup.countActive(true);
-    const schoolSize = Math.min(
-      remaining,
-      relationship === "prey" ? Phaser.Math.Between(2, 3) : 1,
-    );
-    const placement = initial ? this.pickInitialSchoolPosition() : this.pickIncomingSchoolPosition();
+    const preferredSchoolSize = relationship === "danger" || enemyLevel >= 8
+      ? 1
+      : enemyLevel >= 5
+        ? Phaser.Math.Between(1, 2)
+        : Phaser.Math.Between(2, 3);
+    const schoolSize = Math.min(remaining, preferredSchoolSize);
     const school = ++this.schoolId;
 
     for (let index = 0; index < schoolSize; index += 1) {
@@ -772,9 +857,13 @@ export class OceanScene extends Phaser.Scene {
     const playerLevel = evolutionStageForMass(this.mass).level;
     const threat = abyssThreatForSeconds((this.time.now - this.startedAt) / 1_000);
     const dangerChance = 0.2 + threat * 0.28;
-    const level = Math.random() < dangerChance
-      ? Math.min(EVOLUTION_STAGES.length, playerLevel + Phaser.Math.Between(1, 2))
-      : pickEnemyLevel(playerLevel);
+    const maximumLevel = Math.min(
+      requiredLevelForDepth(this.beacon.y),
+      playerLevel + 2,
+    );
+    const level = Math.random() < dangerChance && maximumLevel > playerLevel
+      ? Phaser.Math.Between(playerLevel + 1, maximumLevel)
+      : pickEnemyLevelForDepth(playerLevel, this.beacon.y);
     const remaining = this.maxActiveFish - this.fishGroup.countActive(true);
     const schoolSize = Math.min(remaining, Phaser.Math.Between(2, 4));
     const school = ++this.schoolId;
@@ -782,13 +871,16 @@ export class OceanScene extends Phaser.Scene {
     for (let index = 0; index < schoolSize; index += 1) {
       const angle = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
       const radius = Phaser.Math.FloatBetween(180, 320);
+      const spawnX = this.beacon.x + Math.cos(angle) * radius;
+      const spawnY = this.beacon.y + Math.sin(angle) * radius;
+      const spawnLevel = Math.min(level, requiredLevelForDepth(spawnY));
       this.spawnEnemy(
-        this.beacon.x + Math.cos(angle) * radius,
-        this.beacon.y + Math.sin(angle) * radius,
-        level,
+        spawnX,
+        spawnY,
+        spawnLevel,
         Phaser.Math.Angle.Between(
-          this.beacon.x + Math.cos(angle) * radius,
-          this.beacon.y + Math.sin(angle) * radius,
+          spawnX,
+          spawnY,
           this.beacon.x,
           this.beacon.y,
         ),
@@ -1371,6 +1463,7 @@ export class OceanScene extends Phaser.Scene {
 
   private handleResize(gameSize: Phaser.Structs.Size) {
     this.background?.setSize(gameSize.width, gameSize.height);
+    this.depthShade?.setSize(gameSize.width, gameSize.height);
     this.cameras.main.setDeadzone(
       Math.min(170, gameSize.width * 0.28),
       Math.min(110, gameSize.height * 0.22),
@@ -1400,6 +1493,7 @@ export class OceanScene extends Phaser.Scene {
   private getSnapshot(): OceanSnapshot {
     const elapsed = Math.max(0, Math.floor((this.time.now - this.startedAt) / 1_000));
     const stage = evolutionStageForMass(this.mass);
+    const depthLevel = requiredLevelForDepth(this.player?.y ?? 0);
     return {
       score: this.score,
       mass: this.mass,
@@ -1417,6 +1511,12 @@ export class OceanScene extends Phaser.Scene {
         ? null
         : Math.max(0, Math.ceil((this.pressureDeadlineAt - this.time.now) / 1_000)),
       threatTier: threatTierForSeconds(elapsed),
+      depthMeters: depthMetersForWorldY(this.player?.y ?? 0),
+      depthLevel,
+      depthZone: depthZoneNameForLevel(depthLevel),
+      depthDamageSeconds: this.nextDepthDamageAt === null
+        ? null
+        : Math.max(0, Math.ceil((this.nextDepthDamageAt - this.time.now) / 1_000)),
       lastEvent: this.lastEvent,
       timeLeft: this.mode === "rush" ? Math.max(0, RUSH_DURATION_SECONDS - elapsed) : null,
       status: this.status,

@@ -41,6 +41,10 @@ const initialSnapshot: OceanSnapshot = {
   requiredLevel: 1,
   pressureSecondsLeft: null,
   threatTier: 1,
+  depthMeters: 0,
+  depthLevel: 1,
+  depthZone: "阳光浅海",
+  depthDamageSeconds: null,
   lastEvent: null,
   timeLeft: null,
   status: "running",
@@ -116,6 +120,8 @@ export function OceanGrowthPage() {
       ? "误触海雷"
       : snapshot.deathCause === "pressure"
         ? "海压崩解"
+        : snapshot.deathCause === "depth"
+          ? "深水失压"
         : snapshot.deathCause === "timeout"
           ? "潮汐结束"
           : "被深海截停";
@@ -201,12 +207,25 @@ export function OceanGrowthPage() {
             </div>
 
             <div
-              className={`pressure-hud ${snapshot.pressureSecondsLeft !== null ? "critical" : ""}`}
+              className={`pressure-hud ${
+                snapshot.pressureSecondsLeft !== null || snapshot.depthDamageSeconds !== null
+                  ? "critical"
+                  : ""
+              }`}
               aria-live="polite"
             >
               <Waves aria-hidden="true" size={18} />
               <div>
-                <span>海压要求 LV.{snapshot.requiredLevel}</span>
+                <span>{snapshot.depthZone} · {snapshot.depthMeters}m</span>
+                <strong>
+                  {snapshot.depthDamageSeconds === null
+                    ? `安全等级 LV.${snapshot.depthLevel}`
+                    : `${snapshot.depthDamageSeconds}s 后失去生命`}
+                </strong>
+              </div>
+              <i aria-hidden="true" />
+              <div>
+                <span>生存海压 LV.{snapshot.requiredLevel}</span>
                 <strong>
                   {snapshot.pressureSecondsLeft === null
                     ? "适应"
