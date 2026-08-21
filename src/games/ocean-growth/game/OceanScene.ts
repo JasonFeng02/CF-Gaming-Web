@@ -34,13 +34,12 @@ const PLAYER_SPEED = 285;
 const RUSH_DURATION_SECONDS = 90;
 
 type EnemyFish = Phaser.Physics.Arcade.Image;
-type FishRelationship = "prey" | "neutral" | "danger";
+type FishRelationship = "prey" | "danger";
 
 export class OceanScene extends Phaser.Scene {
   private readonly hooks: OceanGameHooks;
   private readonly mode: OceanGameMode;
   private player!: Phaser.Physics.Arcade.Image;
-  private playerAura!: Phaser.GameObjects.Ellipse;
   private fishGroup!: Phaser.Physics.Arcade.Group;
   private background!: Phaser.GameObjects.TileSprite;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -90,16 +89,11 @@ export class OceanScene extends Phaser.Scene {
 
     this.fishGroup = this.physics.add.group();
     const initialStage = evolutionStageForMass(this.mass);
-    this.playerAura = this.add
-      .ellipse(0, 0, 96, 58, 0xd9f45c, 0.05)
-      .setStrokeStyle(2, 0xd9f45c, 0.7)
-      .setDepth(8);
     this.player = this.physics.add
       .image(0, 0, initialStage.texture)
       .setDepth(10)
       .setScale(initialStage.renderScale);
     this.configureBody(this.player);
-    this.syncPlayerAura();
 
     this.cameras.main
       .startFollow(this.player, true, 0.075, 0.075)
@@ -230,7 +224,6 @@ export class OceanScene extends Phaser.Scene {
       this.player.setFlipX(body.velocity.x < 0);
     }
     this.player.setRotation(Phaser.Math.Clamp(body.velocity.y / 1_600, -0.18, 0.18));
-    this.syncPlayerAura();
   }
 
   private updateEnemies(delta: number) {
@@ -284,7 +277,7 @@ export class OceanScene extends Phaser.Scene {
     }
 
     const difficulty = difficultyForSeconds((time - this.startedAt) / 1_000);
-    this.nextSpawnAt = time + Phaser.Math.Between(1_050, Math.round(1_750 - difficulty * 300));
+    this.nextSpawnAt = time + Phaser.Math.Between(900, Math.round(1_500 - difficulty * 200));
   }
 
   private updateClock(time: number) {
@@ -378,7 +371,7 @@ export class OceanScene extends Phaser.Scene {
     const relationship = this.relationshipForLevel(level);
     const difficulty = difficultyForSeconds((this.time.now - this.startedAt) / 1_000);
     const speedMultiplier = this.mode === "rush" ? 1.14 : 1;
-    const baseSpeed = relationship === "danger" ? 104 : relationship === "prey" ? 84 : 92;
+    const baseSpeed = relationship === "danger" ? 104 : 84;
     const speed = (baseSpeed + Math.random() * 34 + difficulty * 38) * speedMultiplier;
     const enemy = this.fishGroup.create(x, y, stage.texture) as EnemyFish;
     const marker = this.createRelationshipMarker(x, y, relationship);
@@ -413,16 +406,12 @@ export class OceanScene extends Phaser.Scene {
       marker.setFillStyle(0xd9f45c, 0.9).setStrokeStyle();
     } else if (relationship === "danger") {
       marker.setFillStyle(0xff765e, 0.95).setStrokeStyle(2, 0xffffff, 0.5);
-    } else {
-      marker.setFillStyle(0xffffff, 0).setStrokeStyle(1, 0xffffff, 0.52);
     }
   }
 
   private relationshipForLevel(level: number): FishRelationship {
     const playerLevel = evolutionStageForMass(this.mass).level;
-    if (level < playerLevel) return "prey";
-    if (level > playerLevel) return "danger";
-    return "neutral";
+    return level <= playerLevel ? "prey" : "danger";
   }
 
   private refreshRelationships() {
@@ -461,12 +450,6 @@ export class OceanScene extends Phaser.Scene {
       this.takeDamage(enemy);
       return;
     }
-
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const away = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y)
-      .normalize()
-      .scale(170);
-    body.velocity.add(away);
   };
 
   private consumeEnemy(enemy: EnemyFish, enemyMass: number) {
@@ -476,7 +459,7 @@ export class OceanScene extends Phaser.Scene {
     this.removeEnemy(enemy, true);
     this.combo = this.time.now - this.lastEatAt <= COMBO_WINDOW_MS ? this.combo + 1 : 1;
     this.lastEatAt = this.time.now;
-    this.score += pointsForPrey(enemyMass, this.combo);
+    this.score += pointsForPrey(this.mass, enemyMass, this.combo);
     this.mass = massAfterEating(this.mass, enemyMass);
     this.createEatBurst(x, y);
 
@@ -504,13 +487,38 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private evolvePlayer(stage: (typeof EVOLUTION_STAGES)[number]) {
-    this.player.setTexture(stage.texture).setScale(stage.renderScale);
+    const previousTexture = this.player.texture.key;
+    const previousScale = this.player.scaleX;
+    const previousFlip = this.player.flipX;
+    const ghost = this.add
+      .image(this.player.x, this.player.y, previousTexture)
+      .setDepth(9)
+      .setFlipX(previousFlip)
+      .setScale(previousScale);
+
+    this.player
+      .setTexture(stage.texture)
+      .setScale(stage.renderScale * 0.64)
+      .setAlpha(0.15);
     this.configureBody(this.player);
     this.refreshRelationships();
-    this.syncPlayerAura();
-    this.cameras.main.flash(260, 217, 244, 92);
-    this.cameras.main.zoomTo(1.045, 150, "Sine.Out", false, (_camera, progress) => {
-      if (progress === 1) this.cameras.main.zoomTo(1, 260, "Sine.InOut");
+    this.createEvolutionBurst();
+    this.tweens.add({
+      targets: ghost,
+      scaleX: previousScale * 1.28,
+      scaleY: previousScale * 1.28,
+      alpha: 0,
+      duration: 260,
+      ease: "Cubic.Out",
+      onComplete: () => ghost.destroy(),
+    });
+    this.tweens.add({
+      targets: this.player,
+      scaleX: stage.renderScale,
+      scaleY: stage.renderScale,
+      alpha: 1,
+      duration: 340,
+      ease: "Back.Out",
     });
 
     const label = this.add
@@ -541,14 +549,13 @@ export class OceanScene extends Phaser.Scene {
     this.cameras.main.shake(200, 0.012);
     this.player.setTint(0xff8c7c);
     this.tweens.add({
-      targets: [this.player, this.playerAura],
+      targets: this.player,
       alpha: 0.3,
       yoyo: true,
       repeat: 4,
       duration: 105,
       onComplete: () => {
         this.player.clearTint().setAlpha(1);
-        this.playerAura.setAlpha(1);
       },
     });
 
@@ -598,12 +605,24 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private syncPlayerAura() {
-    if (!this.playerAura || !this.player) return;
-    this.playerAura
-      .setPosition(this.player.x, this.player.y)
-      .setRotation(this.player.rotation)
-      .setDisplaySize(this.player.displayWidth * 1.38, this.player.displayHeight * 1.48);
+  private createEvolutionBurst() {
+    for (let index = 0; index < 12; index += 1) {
+      const angle = (index / 12) * Math.PI * 2;
+      const bubble = this.add
+        .image(this.player.x, this.player.y, "bubble")
+        .setDepth(20)
+        .setScale(0.13 + Math.random() * 0.13)
+        .setAlpha(0.8);
+      this.tweens.add({
+        targets: bubble,
+        x: bubble.x + Math.cos(angle) * Phaser.Math.Between(48, 84),
+        y: bubble.y + Math.sin(angle) * Phaser.Math.Between(32, 62),
+        alpha: 0,
+        duration: 460 + Math.random() * 220,
+        ease: "Cubic.Out",
+        onComplete: () => bubble.destroy(),
+      });
+    }
   }
 
   private syncWorldChunks(force: boolean) {
@@ -691,7 +710,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private get maxActiveFish() {
-    const base = this.scale.width < 620 ? 7 : 9;
+    const base = this.scale.width < 620 ? 9 : 11;
     return this.mode === "rush" ? base + 2 : base;
   }
 

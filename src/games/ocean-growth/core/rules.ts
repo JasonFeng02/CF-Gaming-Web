@@ -47,13 +47,19 @@ export const stageProgressForMass = (mass: number) => {
 };
 
 export const canEat = (playerMass: number, targetMass: number) =>
-  levelForMass(targetMass) < levelForMass(playerMass);
+  levelForMass(targetMass) <= levelForMass(playerMass);
 
 export const isDangerous = (playerMass: number, targetMass: number) =>
   levelForMass(targetMass) > levelForMass(playerMass);
 
-export const pointsForPrey = (targetMass: number, combo: number) =>
-  Math.round(targetMass * 7 * (1 + Math.min(combo, 8) * 0.08));
+export const pointsForPrey = (
+  playerMass: number,
+  targetMass: number,
+  combo: number,
+) => {
+  const sameLevelBonus = levelForMass(targetMass) === levelForMass(playerMass) ? 1.25 : 1;
+  return Math.round(targetMass * 7 * sameLevelBonus * (1 + Math.min(combo, 8) * 0.08));
+};
 
 export const massAfterEating = (playerMass: number, targetMass: number) =>
   playerMass + Math.max(1.4, targetMass * 0.16);

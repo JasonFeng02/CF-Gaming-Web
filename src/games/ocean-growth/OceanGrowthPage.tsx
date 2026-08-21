@@ -232,7 +232,7 @@ export function OceanGrowthPage() {
             </div>
             <div className="encounter-legend" aria-label="鱼群关系标记">
               <span><i className="prey" />猎物</span>
-              <span><i className="neutral" />同阶</span>
+              <span><i className="prey" />同阶可食</span>
               <span><i className="danger" />危险</span>
             </div>
             <button type="button" className="game-start-command" onClick={startGame}>

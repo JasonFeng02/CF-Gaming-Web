@@ -15,10 +15,10 @@ import {
 } from "./rules";
 
 describe("ocean growth rules", () => {
-  it("uses discrete stages so prey, peers, and predators are unambiguous", () => {
+  it("allows same-level catches while keeping higher stages dangerous", () => {
     const playerMass = EVOLUTION_STAGES[2].minMass;
     expect(canEat(playerMass, EVOLUTION_STAGES[1].minMass)).toBe(true);
-    expect(canEat(playerMass, playerMass + 8)).toBe(false);
+    expect(canEat(playerMass, playerMass + 8)).toBe(true);
     expect(isDangerous(playerMass, playerMass + 8)).toBe(false);
     expect(isDangerous(playerMass, EVOLUTION_STAGES[3].minMass)).toBe(true);
   });
@@ -37,7 +37,11 @@ describe("ocean growth rules", () => {
 
   it("grows and scores more for larger prey and combos", () => {
     expect(massAfterEating(28, 18)).toBeGreaterThan(28);
-    expect(pointsForPrey(20, 4)).toBeGreaterThan(pointsForPrey(10, 0));
+    const playerMass = EVOLUTION_STAGES[2].minMass;
+    const lowerLevelScore = pointsForPrey(playerMass, EVOLUTION_STAGES[1].minMass, 0);
+    const sameLevelScore = pointsForPrey(playerMass, playerMass, 0);
+    expect(sameLevelScore).toBeGreaterThan(lowerLevelScore);
+    expect(pointsForPrey(playerMass, playerMass, 4)).toBeGreaterThan(sameLevelScore);
   });
 
   it("changes render scale only at evolution thresholds", () => {
