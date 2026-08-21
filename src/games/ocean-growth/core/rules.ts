@@ -8,16 +8,22 @@ export interface EvolutionStage {
 
 export const EVOLUTION_STAGES: readonly EvolutionStage[] = [
   { level: 1, name: "银鳍幼鱼", minMass: 18, texture: "fish-tier-1", renderScale: 0.22 },
-  { level: 2, name: "蓝纹沙丁", minMass: 28, texture: "fish-tier-2", renderScale: 0.245 },
-  { level: 3, name: "金翼蝶鱼", minMass: 43, texture: "fish-tier-3", renderScale: 0.27 },
-  { level: 4, name: "珊瑚刺豚", minMass: 62, texture: "fish-tier-4", renderScale: 0.3 },
-  { level: 5, name: "红斑石斑", minMass: 86, texture: "fish-tier-5", renderScale: 0.33 },
-  { level: 6, name: "远洋金枪", minMass: 116, texture: "fish-tier-6", renderScale: 0.365 },
-  { level: 7, name: "暗礁梭鱼", minMass: 152, texture: "fish-tier-7", renderScale: 0.4 },
+  { level: 2, name: "蓝纹沙丁", minMass: 42, texture: "fish-tier-2", renderScale: 0.235 },
+  { level: 3, name: "金翼蝶鱼", minMass: 72, texture: "fish-tier-3", renderScale: 0.25 },
+  { level: 4, name: "珊瑚刺豚", minMass: 110, texture: "fish-tier-4", renderScale: 0.27 },
+  { level: 5, name: "红斑石斑", minMass: 158, texture: "fish-tier-5", renderScale: 0.29 },
+  { level: 6, name: "远洋金枪", minMass: 218, texture: "fish-tier-6", renderScale: 0.31 },
+  { level: 7, name: "暗礁梭鱼", minMass: 294, texture: "fish-tier-7", renderScale: 0.33 },
+  { level: 8, name: "赤吻剑鱼", minMass: 390, texture: "fish-tier-8", renderScale: 0.35 },
+  { level: 9, name: "幽灯鮟鱇", minMass: 510, texture: "fish-tier-9", renderScale: 0.37 },
+  { level: 10, name: "星斑蝠鲼", minMass: 660, texture: "fish-tier-10", renderScale: 0.39 },
+  { level: 11, name: "雷纹锤鲨", minMass: 846, texture: "fish-tier-11", renderScale: 0.41 },
+  { level: 12, name: "鲸纹巨鲨", minMass: 1_076, texture: "fish-tier-12", renderScale: 0.43 },
+  { level: 13, name: "深渊龙鱼", minMass: 1_360, texture: "fish-tier-13", renderScale: 0.45 },
 ];
 
-export const INITIAL_PLAYER_MASS = EVOLUTION_STAGES[1].minMass;
-export const CLASSIC_GOAL_MASS = EVOLUTION_STAGES.at(-1)?.minMass ?? 152;
+export const INITIAL_PLAYER_MASS = EVOLUTION_STAGES[0].minMass;
+export const CLASSIC_GOAL_MASS = EVOLUTION_STAGES.at(-1)?.minMass ?? 1_360;
 export const RUSH_GOAL_MASS = EVOLUTION_STAGES[4].minMass;
 
 export const clamp = (value: number, minimum: number, maximum: number) =>
@@ -61,8 +67,23 @@ export const pointsForPrey = (
   return Math.round(targetMass * 7 * sameLevelBonus * (1 + Math.min(combo, 8) * 0.08));
 };
 
+export const sameLevelPreyRequired = (playerLevel: number) =>
+  2 + (clamp(Math.round(playerLevel), 1, EVOLUTION_STAGES.length - 1) - 1) * 0.2;
+
+export const growthForPrey = (playerMass: number, targetMass: number) => {
+  const playerStage = evolutionStageForMass(playerMass);
+  const nextStage = EVOLUTION_STAGES[playerStage.level];
+  if (!nextStage) return 0;
+
+  const targetLevel = levelForMass(targetMass);
+  const levelDifference = Math.max(0, playerStage.level - targetLevel);
+  const stageMass = nextStage.minMass - playerStage.minMass;
+  const sameLevelGrowth = stageMass / sameLevelPreyRequired(playerStage.level);
+  return sameLevelGrowth / 3 ** levelDifference;
+};
+
 export const massAfterEating = (playerMass: number, targetMass: number) =>
-  playerMass + Math.max(1.4, targetMass * 0.16);
+  playerMass + growthForPrey(playerMass, targetMass);
 
 export const difficultyForSeconds = (seconds: number) =>
   clamp(seconds / 180, 0, 1);
