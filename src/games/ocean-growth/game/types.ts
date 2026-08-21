@@ -1,5 +1,6 @@
 export type OceanGameMode = "classic" | "rush";
 export type OceanGameStatus = "running" | "paused" | "won" | "gameover";
+export type OceanDeathCause = "mine" | "predator" | "timeout" | null;
 
 export interface OceanSnapshot {
   score: number;
@@ -12,6 +13,7 @@ export interface OceanSnapshot {
   combo: number;
   timeLeft: number | null;
   status: OceanGameStatus;
+  deathCause: OceanDeathCause;
 }
 
 export interface OceanGameHooks {

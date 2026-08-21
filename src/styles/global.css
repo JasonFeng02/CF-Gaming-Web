@@ -784,6 +784,11 @@ a.game-card:hover .game-card-media img {
   background: var(--coral);
 }
 
+.encounter-legend .mine {
+  border: 2px solid var(--coral);
+  background: #10272d;
+}
+
 .game-start-command {
   display: inline-flex;
   min-width: 154px;

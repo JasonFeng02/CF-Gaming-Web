@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   EVOLUTION_STAGES,
+  CLASSIC_GOAL_MASS,
+  RUSH_GOAL_MASS,
   canEat,
   difficultyForSeconds,
+  enemyRarityForLevel,
   evolutionStageForMass,
   growthForPrey,
+  hasCompletedGrowthGoal,
   isDangerous,
   levelForMass,
   massAfterEating,
@@ -30,6 +34,23 @@ describe("ocean growth rules", () => {
     expect(pickEnemyLevel(6, () => 0.99)).toBe(8);
     expect(pickEnemyLevel(12, () => 0.99)).toBe(13);
     expect(pickEnemyLevel(2, () => 0)).toBe(1);
+  });
+
+  it("makes advanced fish progressively rarer", () => {
+    expect(enemyRarityForLevel(1)).toBeGreaterThan(enemyRarityForLevel(6));
+    expect(enemyRarityForLevel(6)).toBeGreaterThan(enemyRarityForLevel(13));
+
+    const sample = Array.from({ length: 1_000 }, (_, index) =>
+      pickEnemyLevel(6, () => index / 1_000));
+    const count = (level: number) => sample.filter((candidate) => candidate === level).length;
+    expect(count(6)).toBeGreaterThan(count(7));
+    expect(count(7)).toBeGreaterThan(count(8));
+  });
+
+  it("keeps classic mode running at the final tier", () => {
+    expect(hasCompletedGrowthGoal("classic", CLASSIC_GOAL_MASS)).toBe(false);
+    expect(hasCompletedGrowthGoal("classic", CLASSIC_GOAL_MASS * 2)).toBe(false);
+    expect(hasCompletedGrowthGoal("rush", RUSH_GOAL_MASS)).toBe(true);
   });
 
   it("keeps generated mass inside the requested evolution stage", () => {

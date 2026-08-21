@@ -33,6 +33,7 @@ const initialSnapshot: OceanSnapshot = {
   combo: 0,
   timeLeft: null,
   status: "running",
+  deathCause: null,
 };
 
 export function OceanGrowthPage() {
@@ -98,6 +99,13 @@ export function OceanGrowthPage() {
     ((snapshot.level - 1 + snapshot.stageProgress) / (evolutionStages.length - 1)) * 100,
   );
   const currentTexture = EVOLUTION_STAGES[snapshot.level - 1]?.texture ?? initialStage.texture;
+  const resultTitle = snapshot.status === "won"
+    ? "进化完成"
+    : snapshot.deathCause === "mine"
+      ? "误触海雷"
+      : snapshot.deathCause === "timeout"
+        ? "潮汐结束"
+        : "被深海截停";
 
   return (
     <main className="game-page">
@@ -172,7 +180,11 @@ export function OceanGrowthPage() {
                   </span>
                 ))}
               </div>
-              <small>下一形态 {Math.round(snapshot.stageProgress * 100)}%</small>
+              <small>
+                {snapshot.level >= evolutionStages.length
+                  ? "终极形态"
+                  : `下一形态 ${Math.round(snapshot.stageProgress * 100)}%`}
+              </small>
             </div>
 
             <div className="hud-actions">
@@ -234,6 +246,7 @@ export function OceanGrowthPage() {
               <span><i className="prey" />猎物</span>
               <span><i className="prey" />同阶可食</span>
               <span><i className="danger" />危险</span>
+              <span><i className="mine" />海雷致命</span>
             </div>
             <button type="button" className="game-start-command" onClick={startGame}>
               <Play aria-hidden="true" size={19} fill="currentColor" />
@@ -262,7 +275,7 @@ export function OceanGrowthPage() {
             <p className="overlay-kicker">
               {snapshot.status === "won" ? "EVOLUTION COMPLETE" : "RUN ENDED"}
             </p>
-            <h2>{snapshot.status === "won" ? "进化完成" : "被深海截停"}</h2>
+            <h2>{resultTitle}</h2>
             <img
               className="result-fish"
               src={`/assets/ocean-growth/${currentTexture}.png`}

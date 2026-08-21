@@ -21,6 +21,7 @@ const assets = [
   "fish-tier-11",
   "fish-tier-12",
   "fish-tier-13",
+  "sea-mine",
   "bubble",
 ];
 

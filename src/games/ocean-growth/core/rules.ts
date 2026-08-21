@@ -26,6 +26,9 @@ export const INITIAL_PLAYER_MASS = EVOLUTION_STAGES[0].minMass;
 export const CLASSIC_GOAL_MASS = EVOLUTION_STAGES.at(-1)?.minMass ?? 1_360;
 export const RUSH_GOAL_MASS = EVOLUTION_STAGES[4].minMass;
 
+export const hasCompletedGrowthGoal = (mode: "classic" | "rush", mass: number) =>
+  mode === "rush" && mass >= RUSH_GOAL_MASS;
+
 export const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -88,24 +91,39 @@ export const massAfterEating = (playerMass: number, targetMass: number) =>
 export const difficultyForSeconds = (seconds: number) =>
   clamp(seconds / 180, 0, 1);
 
+export const enemyRarityForLevel = (level: number) =>
+  0.84 ** (clamp(Math.round(level), 1, EVOLUTION_STAGES.length) - 1);
+
+const relativeSpawnWeight = (levelDifference: number) => {
+  if (levelDifference <= -2) return 0.28;
+  if (levelDifference === -1) return 0.38;
+  if (levelDifference === 0) return 0.22;
+  if (levelDifference === 1) return 0.09;
+  return 0.03;
+};
+
 export const pickEnemyLevel = (
   playerLevel: number,
   random: () => number = Math.random,
 ) => {
-  const roll = random();
-  let offset: number;
-
-  if (roll < 0.12) offset = -2;
-  else if (roll < 0.54) offset = -1;
-  else if (roll < 0.7) offset = 0;
-  else if (roll < 0.93) offset = 1;
-  else offset = 2;
-
-  return clamp(
-    Math.round(playerLevel) + offset,
-    1,
-    Math.min(EVOLUTION_STAGES.length, Math.round(playerLevel) + 2),
+  const normalizedPlayerLevel = clamp(Math.round(playerLevel), 1, EVOLUTION_STAGES.length);
+  const minimumLevel = Math.max(1, normalizedPlayerLevel - 2);
+  const maximumLevel = Math.min(EVOLUTION_STAGES.length, normalizedPlayerLevel + 2);
+  const candidates = Array.from(
+    { length: maximumLevel - minimumLevel + 1 },
+    (_, index) => minimumLevel + index,
   );
+  const weights = candidates.map((level) =>
+    relativeSpawnWeight(level - normalizedPlayerLevel) * enemyRarityForLevel(level));
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+  let roll = clamp(random(), 0, 0.999_999) * totalWeight;
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    roll -= weights[index];
+    if (roll <= 0) return candidates[index];
+  }
+
+  return candidates.at(-1) ?? normalizedPlayerLevel;
 };
 
 export const massForLevel = (
