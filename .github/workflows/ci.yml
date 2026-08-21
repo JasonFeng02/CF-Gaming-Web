@@ -52,6 +52,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: production
+      url: ${{ steps.deploy.outputs.deployment_url }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,5 +77,10 @@ jobs:
         run: echo "::notice::Cloudflare deployment skipped. Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to enable it."
 
       - name: Deploy Worker
+        id: deploy
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: npx wrangler deploy
+        run: |
+          npx wrangler deploy 2>&1 | tee wrangler-output.log
+          deployment_url="$(sed -nE 's@.*(https://[^[:space:]]+\.workers\.dev).*@\1@p' wrangler-output.log | head -n 1)"
+          test -n "$deployment_url"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
