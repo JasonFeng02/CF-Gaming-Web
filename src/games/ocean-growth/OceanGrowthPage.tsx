@@ -4,7 +4,11 @@ import {
   Heart,
   Pause,
   Play,
+  Radio,
   RotateCcw,
+  ShieldCheck,
+  Star,
+  Waves,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,6 +35,13 @@ const initialSnapshot: OceanSnapshot = {
   stageProgress: 0,
   lives: 3,
   combo: 0,
+  shieldCharges: 0,
+  sonarSeconds: 0,
+  frenzySeconds: 0,
+  requiredLevel: 1,
+  pressureSecondsLeft: null,
+  threatTier: 1,
+  lastEvent: null,
   timeLeft: null,
   status: "running",
   deathCause: null,
@@ -103,9 +114,11 @@ export function OceanGrowthPage() {
     ? "进化完成"
     : snapshot.deathCause === "mine"
       ? "误触海雷"
-      : snapshot.deathCause === "timeout"
-        ? "潮汐结束"
-        : "被深海截停";
+      : snapshot.deathCause === "pressure"
+        ? "海压崩解"
+        : snapshot.deathCause === "timeout"
+          ? "潮汐结束"
+          : "被深海截停";
 
   return (
     <main className="game-page">
@@ -187,6 +200,41 @@ export function OceanGrowthPage() {
               </small>
             </div>
 
+            <div
+              className={`pressure-hud ${snapshot.pressureSecondsLeft !== null ? "critical" : ""}`}
+              aria-live="polite"
+            >
+              <Waves aria-hidden="true" size={18} />
+              <div>
+                <span>海压要求 LV.{snapshot.requiredLevel}</span>
+                <strong>
+                  {snapshot.pressureSecondsLeft === null
+                    ? "适应"
+                    : `${snapshot.pressureSecondsLeft}s 内进化`}
+                </strong>
+              </div>
+              <i aria-hidden="true" />
+              <div>
+                <span>深渊威胁</span>
+                <strong>{snapshot.threatTier} / 5</strong>
+              </div>
+            </div>
+
+            <div className="powerup-hud" aria-label="当前道具状态">
+              <span className={snapshot.shieldCharges > 0 ? "active" : ""} title="气泡护盾">
+                <ShieldCheck aria-hidden="true" size={17} />
+                {snapshot.shieldCharges > 0 ? "1" : "-"}
+              </span>
+              <span className={snapshot.sonarSeconds > 0 ? "active" : ""} title="声呐">
+                <Radio aria-hidden="true" size={17} />
+                {snapshot.sonarSeconds > 0 ? `${snapshot.sonarSeconds}s` : "-"}
+              </span>
+              <span className={snapshot.frenzySeconds > 0 ? "active frenzy" : ""} title="狂食">
+                <Star aria-hidden="true" size={17} />
+                {snapshot.frenzySeconds > 0 ? `${snapshot.frenzySeconds}s` : "-"}
+              </span>
+            </div>
+
             <div className="hud-actions">
               <button
                 type="button"
@@ -214,6 +262,12 @@ export function OceanGrowthPage() {
         {snapshot.combo >= 2 && !isFinished && (
           <div className="combo-badge" aria-live="polite">
             {snapshot.combo} 连吞
+          </div>
+        )}
+
+        {snapshot.lastEvent && !isFinished && (
+          <div key={snapshot.lastEvent} className="ocean-event" aria-live="polite">
+            {snapshot.lastEvent}
           </div>
         )}
 

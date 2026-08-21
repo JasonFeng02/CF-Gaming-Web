@@ -25,6 +25,8 @@ export const EVOLUTION_STAGES: readonly EvolutionStage[] = [
 export const INITIAL_PLAYER_MASS = EVOLUTION_STAGES[0].minMass;
 export const CLASSIC_GOAL_MASS = EVOLUTION_STAGES.at(-1)?.minMass ?? 1_360;
 export const RUSH_GOAL_MASS = EVOLUTION_STAGES[4].minMass;
+export const PRESSURE_INTERVAL_SECONDS = 45;
+export const PRESSURE_GRACE_SECONDS = 12;
 
 export const hasCompletedGrowthGoal = (mode: "classic" | "rush", mass: number) =>
   mode === "rush" && mass >= RUSH_GOAL_MASS;
@@ -90,6 +92,25 @@ export const massAfterEating = (playerMass: number, targetMass: number) =>
 
 export const difficultyForSeconds = (seconds: number) =>
   clamp(seconds / 180, 0, 1);
+
+export const requiredLevelForSeconds = (seconds: number) =>
+  clamp(
+    1 + Math.floor(Math.max(0, seconds) / PRESSURE_INTERVAL_SECONDS),
+    1,
+    EVOLUTION_STAGES.length,
+  );
+
+export const abyssThreatForSeconds = (seconds: number) =>
+  clamp(Math.max(0, seconds) / 360, 0, 1);
+
+export const threatTierForSeconds = (seconds: number) =>
+  clamp(1 + Math.floor(abyssThreatForSeconds(seconds) * 5), 1, 5);
+
+export const mineSpawnChanceForSeconds = (seconds: number) =>
+  0.28 + abyssThreatForSeconds(seconds) * 0.52;
+
+export const maxMinesForSeconds = (seconds: number) =>
+  1 + Math.floor(abyssThreatForSeconds(seconds) * 2);
 
 export const enemyRarityForLevel = (level: number) =>
   0.84 ** (clamp(Math.round(level), 1, EVOLUTION_STAGES.length) - 1);

@@ -1,6 +1,6 @@
 export type OceanGameMode = "classic" | "rush";
 export type OceanGameStatus = "running" | "paused" | "won" | "gameover";
-export type OceanDeathCause = "mine" | "predator" | "timeout" | null;
+export type OceanDeathCause = "mine" | "predator" | "pressure" | "timeout" | null;
 
 export interface OceanSnapshot {
   score: number;
@@ -11,6 +11,13 @@ export interface OceanSnapshot {
   stageProgress: number;
   lives: number;
   combo: number;
+  shieldCharges: number;
+  sonarSeconds: number;
+  frenzySeconds: number;
+  requiredLevel: number;
+  pressureSecondsLeft: number | null;
+  threatTier: number;
+  lastEvent: string | null;
   timeLeft: number | null;
   status: OceanGameStatus;
   deathCause: OceanDeathCause;

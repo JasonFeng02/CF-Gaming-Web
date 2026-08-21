@@ -3,7 +3,9 @@ import {
   CLASSIC_GOAL_MASS,
   EVOLUTION_STAGES,
   INITIAL_PLAYER_MASS,
+  PRESSURE_GRACE_SECONDS,
   RUSH_GOAL_MASS,
+  abyssThreatForSeconds,
   canEat,
   difficultyForSeconds,
   evolutionStageForLevel,
@@ -12,10 +14,14 @@ import {
   isDangerous,
   massAfterEating,
   massForLevel,
+  maxMinesForSeconds,
+  mineSpawnChanceForSeconds,
   pickEnemyLevel,
   pointsForPrey,
+  requiredLevelForSeconds,
   scaleForMass,
   stageProgressForMass,
+  threatTierForSeconds,
 } from "../core/rules";
 import type {
   OceanGameHooks,
@@ -34,12 +40,19 @@ const CHUNK_RADIUS = 2;
 const COMBO_WINDOW_MS = 2_700;
 const PLAYER_SPEED = 285;
 const RUSH_DURATION_SECONDS = 90;
-const MAX_ACTIVE_MINES = 2;
-const MINE_SPAWN_CHANCE = 0.45;
+const SONAR_DURATION_MS = 10_000;
+const FRENZY_DURATION_MS = 8_000;
+const BEACON_DURATION_MS = 14_000;
+const CURRENT_GATE_RADIUS = 112;
 
 type EnemyFish = Phaser.Physics.Arcade.Image;
 type SeaMine = Phaser.Physics.Arcade.Image;
+type OceanPickup = Phaser.Physics.Arcade.Image;
+type CurrentGate = Phaser.GameObjects.Image;
+type PositionedObject = Phaser.GameObjects.GameObject & { active: boolean; x: number; y: number };
 type FishRelationship = "prey" | "danger";
+type PickupKind = "shield" | "sonar" | "frenzy";
+type SonarCategory = "prey" | "danger" | "mine" | "beacon";
 
 export class OceanScene extends Phaser.Scene {
   private readonly hooks: OceanGameHooks;
@@ -47,6 +60,10 @@ export class OceanScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private fishGroup!: Phaser.Physics.Arcade.Group;
   private mineGroup!: Phaser.Physics.Arcade.Group;
+  private pickupGroup!: Phaser.Physics.Arcade.Group;
+  private currentGateGroup!: Phaser.GameObjects.Group;
+  private beacon: Phaser.GameObjects.Image | null = null;
+  private readonly sonarIndicators = new Map<SonarCategory, Phaser.GameObjects.Triangle>();
   private background!: Phaser.GameObjects.TileSprite;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
@@ -62,9 +79,21 @@ export class OceanScene extends Phaser.Scene {
   private startedAt = 0;
   private lastEatAt = 0;
   private invulnerableUntil = 0;
+  private shieldCharges = 0;
+  private sonarUntil = 0;
+  private frenzyUntil = 0;
+  private pressureDeadlineAt: number | null = null;
+  private lastEvent: string | null = null;
+  private lastEventUntil = 0;
   private lastSecond = -1;
   private nextSpawnAt = 0;
   private nextMineSpawnAt = 0;
+  private nextPickupSpawnAt = 0;
+  private nextCurrentGateSpawnAt = 0;
+  private nextBeaconSpawnAt = 0;
+  private beaconExpiresAt = 0;
+  private nextBeaconPulseAt = 0;
+  private pickupCycleIndex = 0;
   private schoolId = 0;
   private lastChunkX = Number.NaN;
   private lastChunkY = Number.NaN;
@@ -82,6 +111,11 @@ export class OceanScene extends Phaser.Scene {
     }
     this.load.image("bubble", `${ASSET_ROOT}/bubble.png`);
     this.load.image("sea-mine", `${ASSET_ROOT}/sea-mine.png`);
+    this.load.image("pickup-shield", `${ASSET_ROOT}/pickup-shield.png`);
+    this.load.image("pickup-sonar", `${ASSET_ROOT}/pickup-sonar.png`);
+    this.load.image("pickup-frenzy", `${ASSET_ROOT}/pickup-frenzy.png`);
+    this.load.image("current-gate", `${ASSET_ROOT}/current-gate.png`);
+    this.load.image("bait-beacon", `${ASSET_ROOT}/bait-beacon.png`);
   }
 
   create() {
@@ -98,6 +132,8 @@ export class OceanScene extends Phaser.Scene {
 
     this.fishGroup = this.physics.add.group();
     this.mineGroup = this.physics.add.group();
+    this.pickupGroup = this.physics.add.group();
+    this.currentGateGroup = this.add.group();
     const initialStage = evolutionStageForMass(this.mass);
     this.player = this.physics.add
       .image(0, 0, initialStage.texture)
@@ -115,6 +151,7 @@ export class OceanScene extends Phaser.Scene {
     this.spawnSchool(true, Math.max(1, initialStage.level - 1));
     this.spawnSchool(true, initialStage.level);
     this.spawnSchool(true, Math.min(EVOLUTION_STAGES.length, initialStage.level + 1));
+    this.spawnCurrentGate(true);
 
     this.physics.add.overlap(
       this.player,
@@ -130,6 +167,13 @@ export class OceanScene extends Phaser.Scene {
       undefined,
       this,
     );
+    this.physics.add.overlap(
+      this.player,
+      this.pickupGroup,
+      this.handlePickupOverlap,
+      undefined,
+      this,
+    );
 
     this.cursors = this.input.keyboard?.createCursorKeys();
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as typeof this.wasd;
@@ -138,6 +182,7 @@ export class OceanScene extends Phaser.Scene {
     this.scale.on("resize", this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off("resize", this.handleResize, this);
+      this.clearSonarIndicators();
       this.chunks.clear();
     });
 
@@ -152,12 +197,17 @@ export class OceanScene extends Phaser.Scene {
     this.updatePlayer(time);
     this.updateEnemies(delta);
     this.updateMines(delta);
+    this.updatePickups(delta);
+    this.updateCurrentGates(time, delta);
+    this.updateBeacon(time);
+    this.updateSonar(time);
     this.updateWorldView();
     this.updateSpawning(time);
     this.updateMineSpawning(time);
+    this.updatePickupSpawning(time);
     this.updateClock(time);
 
-    if (this.combo > 0 && time - this.lastEatAt > COMBO_WINDOW_MS) {
+    if (this.combo > 0 && time - this.lastEatAt > this.comboWindowMs) {
       this.combo = 0;
       this.emitSnapshot();
     }
@@ -186,9 +236,24 @@ export class OceanScene extends Phaser.Scene {
     this.deathCause = null;
     this.startedAt = this.time.now;
     this.lastEatAt = 0;
+    this.invulnerableUntil = 0;
+    this.shieldCharges = 0;
+    this.sonarUntil = 0;
+    this.frenzyUntil = 0;
+    this.pressureDeadlineAt = null;
+    this.lastEvent = null;
+    this.lastEventUntil = 0;
     this.lastSecond = -1;
     this.nextSpawnAt = this.time.now + 900;
     this.nextMineSpawnAt = this.time.now + Phaser.Math.Between(14_000, 22_000);
+    this.nextPickupSpawnAt = this.time.now + 2_800;
+    this.nextCurrentGateSpawnAt = this.time.now + 12_000;
+    this.nextBeaconSpawnAt = this.time.now + 16_000;
+    this.beaconExpiresAt = 0;
+    this.nextBeaconPulseAt = 0;
+    this.pickupCycleIndex = 0;
+    this.beacon = null;
+    this.sonarIndicators.clear();
     this.pointerActive = false;
     this.schoolId = 0;
     this.lastChunkX = Number.NaN;
@@ -227,20 +292,23 @@ export class OceanScene extends Phaser.Scene {
     );
 
     const desired = new Phaser.Math.Vector2();
+    const speed = PLAYER_SPEED * (time < this.frenzyUntil ? 1.35 : 1);
     if (keyboardDirection.lengthSq() > 0) {
-      desired.copy(keyboardDirection).normalize().scale(PLAYER_SPEED);
+      desired.copy(keyboardDirection).normalize().scale(speed);
       this.pointerActive = false;
     } else if (this.pointerActive && time - this.lastPointerAt < 4_500) {
       desired.set(this.target.x - this.player.x, this.target.y - this.player.y);
       const distance = desired.length();
       if (distance > 14) {
-        desired.normalize().scale(Math.min(PLAYER_SPEED, distance * 2.6));
+        desired.normalize().scale(Math.min(speed, distance * 2.6));
       } else {
         desired.set(0, 0);
       }
     }
 
     body.velocity.lerp(desired, 0.11);
+    const current = this.currentVectorAt(this.player.x, this.player.y);
+    body.velocity.add(current);
     if (Math.abs(body.velocity.x) > 8) {
       this.player.setFlipX(body.velocity.x < 0);
     }
@@ -249,6 +317,8 @@ export class OceanScene extends Phaser.Scene {
 
   private updateEnemies(delta: number) {
     const seconds = delta / 1_000;
+    const elapsed = (this.time.now - this.startedAt) / 1_000;
+    const threat = abyssThreatForSeconds(elapsed);
     const despawnDistance = Math.hypot(this.scale.width / 2, this.scale.height / 2) + 320;
 
     for (const child of [...this.fishGroup.getChildren()]) {
@@ -265,14 +335,33 @@ export class OceanScene extends Phaser.Scene {
       );
       const toPlayer = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
       const playerDistance = toPlayer.length();
+      const enemyLevel = enemy.getData("level") as number;
+      const playerLevel = evolutionStageForMass(this.mass).level;
+      let trackingPlayer = false;
 
       if (relationship === "prey" && playerDistance < 210) {
         heading.lerp(toPlayer.normalize().negate(), 0.035).normalize();
+      } else if (
+        relationship === "danger" &&
+        this.time.now >= ((enemy.getData("retreatUntil") as number | undefined) ?? 0) &&
+        playerDistance < 140 + threat * 260 + Math.max(0, enemyLevel - playerLevel) * 36
+      ) {
+        heading.lerp(toPlayer.normalize(), 0.008 + threat * 0.022).normalize();
+        trackingPlayer = true;
+      }
+
+      if (this.beacon?.active && !trackingPlayer) {
+        const toBeacon = new Phaser.Math.Vector2(this.beacon.x - enemy.x, this.beacon.y - enemy.y);
+        if (toBeacon.length() < 560) {
+          heading.lerp(toBeacon.normalize(), relationship === "danger" ? 0.026 : 0.017).normalize();
+        }
       }
 
       enemy.setData({ headingX: heading.x, headingY: heading.y, phase });
-      enemy.x += heading.x * speed * seconds;
-      enemy.y += (heading.y * speed + Math.sin(phase) * 18) * seconds;
+      const dangerSpeed = relationship === "danger" ? 1 + threat * 0.55 : 1;
+      const current = this.currentVectorAt(enemy.x, enemy.y);
+      enemy.x += (heading.x * speed * dangerSpeed + current.x) * seconds;
+      enemy.y += (heading.y * speed * dangerSpeed + Math.sin(phase) * 18 + current.y) * seconds;
       enemy.setFlipX(heading.x < 0);
       enemy.setRotation(Phaser.Math.Clamp(heading.y * 0.22, -0.2, 0.2));
       marker.setPosition(enemy.x, enemy.y - enemy.displayHeight * 0.58 - 7);
@@ -285,6 +374,7 @@ export class OceanScene extends Phaser.Scene {
 
   private updateMines(delta: number) {
     const seconds = delta / 1_000;
+    const threat = abyssThreatForSeconds((this.time.now - this.startedAt) / 1_000);
     const despawnDistance = Math.hypot(this.scale.width / 2, this.scale.height / 2) + 520;
 
     for (const child of [...this.mineGroup.getChildren()]) {
@@ -293,14 +383,178 @@ export class OceanScene extends Phaser.Scene {
 
       const phase = (mine.getData("phase") as number) + seconds * 0.8;
       mine.setData("phase", phase);
-      mine.x += (mine.getData("driftX") as number) * seconds;
-      mine.y += ((mine.getData("driftY") as number) + Math.sin(phase) * 5) * seconds;
+      const current = this.currentVectorAt(mine.x, mine.y);
+      const driftMultiplier = 1 + threat * 0.8;
+      mine.x += ((mine.getData("driftX") as number) * driftMultiplier + current.x) * seconds;
+      mine.y += (
+        (mine.getData("driftY") as number) * driftMultiplier + Math.sin(phase) * 5 + current.y
+      ) * seconds;
       mine.rotation += seconds * 0.2;
 
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, mine.x, mine.y) > despawnDistance) {
         mine.destroy();
       }
     }
+  }
+
+  private updatePickups(delta: number) {
+    const seconds = delta / 1_000;
+    const despawnDistance = Math.hypot(this.scale.width / 2, this.scale.height / 2) + 620;
+
+    for (const child of [...this.pickupGroup.getChildren()]) {
+      const pickup = child as OceanPickup;
+      if (!pickup.active || pickup.getData("collected")) continue;
+
+      const phase = (pickup.getData("phase") as number) + seconds * 1.8;
+      const current = this.currentVectorAt(pickup.x, pickup.y);
+      pickup.setData("phase", phase);
+      pickup.x += ((pickup.getData("driftX") as number) + current.x) * seconds;
+      pickup.y += ((pickup.getData("driftY") as number) + current.y) * seconds;
+      pickup.setScale((pickup.getData("baseScale") as number) * (1 + Math.sin(phase) * 0.045));
+      pickup.rotation += seconds * 0.12;
+
+      if (
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, pickup.x, pickup.y) >
+        despawnDistance
+      ) {
+        pickup.destroy();
+      }
+    }
+  }
+
+  private updateCurrentGates(time: number, delta: number) {
+    const seconds = delta / 1_000;
+    for (const child of [...this.currentGateGroup.getChildren()]) {
+      const gate = child as CurrentGate;
+      if (!gate.active) continue;
+
+      const phase = (gate.getData("phase") as number) + seconds * 1.5;
+      gate.setData("phase", phase).setAlpha(0.66 + Math.sin(phase) * 0.14);
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, gate.x, gate.y) > 1_650) {
+        gate.destroy();
+      }
+    }
+
+    if (time >= this.nextCurrentGateSpawnAt && this.currentGateGroup.countActive(true) < 2) {
+      this.spawnCurrentGate(false);
+      this.nextCurrentGateSpawnAt = time + Phaser.Math.Between(16_000, 24_000);
+    }
+  }
+
+  private updateBeacon(time: number) {
+    if (this.beacon?.active && time >= this.beaconExpiresAt) {
+      this.beacon.destroy();
+      this.beacon = null;
+      this.nextBeaconSpawnAt = time + Phaser.Math.Between(24_000, 34_000);
+      this.announce("诱饵灯塔熄灭");
+      this.emitSnapshot();
+    }
+
+    if (!this.beacon?.active && time >= this.nextBeaconSpawnAt) {
+      this.spawnBeacon();
+      return;
+    }
+
+    if (this.beacon?.active && time >= this.nextBeaconPulseAt) {
+      this.spawnBeaconSchool();
+      this.createBeaconPulse();
+      this.nextBeaconPulseAt = time + Phaser.Math.Between(2_200, 3_000);
+    }
+  }
+
+  private updateSonar(time: number) {
+    if (time >= this.sonarUntil) {
+      this.clearSonarIndicators();
+      return;
+    }
+
+    const targets: Record<SonarCategory, PositionedObject | null> = {
+      prey: this.nearestFish("prey"),
+      danger: this.nearestFish("danger"),
+      mine: this.nearestObject(this.mineGroup.getChildren()),
+      beacon: this.beacon?.active ? this.beacon as PositionedObject : null,
+    };
+    const colors: Record<SonarCategory, number> = {
+      prey: 0xd9f45c,
+      danger: 0xff765e,
+      mine: 0xffc15c,
+      beacon: 0x6ee8ff,
+    };
+    const camera = this.cameras.main;
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
+    const radiusX = Math.max(32, centerX - 28);
+    const radiusY = Math.max(32, centerY - 28);
+
+    for (const category of Object.keys(targets) as SonarCategory[]) {
+      const target = targets[category];
+      let indicator = this.sonarIndicators.get(category);
+      if (!target) {
+        indicator?.setVisible(false);
+        continue;
+      }
+
+      if (!indicator) {
+        indicator = this.add
+          .triangle(0, 0, -10, -7, -10, 7, 10, 0, colors[category], 0.95)
+          .setStrokeStyle(2, 0x082e38, 0.85)
+          .setScrollFactor(0)
+          .setDepth(60);
+        this.sonarIndicators.set(category, indicator);
+      }
+
+      const angle = Phaser.Math.Angle.Between(camera.midPoint.x, camera.midPoint.y, target.x, target.y);
+      const directionX = Math.cos(angle);
+      const directionY = Math.sin(angle);
+      const edgeScale = 1 / Math.max(
+        Math.abs(directionX) / radiusX,
+        Math.abs(directionY) / radiusY,
+      );
+      indicator
+        .setPosition(centerX + directionX * edgeScale, centerY + directionY * edgeScale)
+        .setRotation(angle)
+        .setVisible(true);
+    }
+  }
+
+  private clearSonarIndicators() {
+    for (const indicator of this.sonarIndicators.values()) indicator.destroy();
+    this.sonarIndicators.clear();
+  }
+
+  private nearestFish(relationship: FishRelationship) {
+    return this.nearestObject(
+      this.fishGroup.getChildren().filter(
+        (child) => (child as EnemyFish).getData("relationship") === relationship,
+      ),
+    );
+  }
+
+  private nearestObject(children: Phaser.GameObjects.GameObject[]): PositionedObject | null {
+    let nearest: PositionedObject | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const child of children) {
+      if (
+        !("x" in child) ||
+        !("y" in child) ||
+        !("active" in child) ||
+        typeof child.x !== "number" ||
+        typeof child.y !== "number" ||
+        !child.active
+      ) continue;
+      const positionedChild = child as PositionedObject;
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        positionedChild.x,
+        positionedChild.y,
+      );
+      if (distance < nearestDistance) {
+        nearest = positionedChild;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
   }
 
   private updateWorldView() {
@@ -324,12 +578,28 @@ export class OceanScene extends Phaser.Scene {
   private updateMineSpawning(time: number) {
     if (time < this.nextMineSpawnAt) return;
 
-    this.nextMineSpawnAt = time + Phaser.Math.Between(12_000, 22_000);
-    if (this.mineGroup.countActive(true) >= MAX_ACTIVE_MINES || Math.random() > MINE_SPAWN_CHANCE) {
+    const elapsed = (time - this.startedAt) / 1_000;
+    const threat = abyssThreatForSeconds(elapsed);
+    this.nextMineSpawnAt = time + Phaser.Math.Between(
+      Math.round(16_000 - threat * 7_000),
+      Math.round(25_000 - threat * 11_000),
+    );
+    const beaconBonus = this.beacon?.active ? 0.16 : 0;
+    if (
+      this.mineGroup.countActive(true) >= maxMinesForSeconds(elapsed) ||
+      Math.random() > Math.min(0.94, mineSpawnChanceForSeconds(elapsed) + beaconBonus)
+    ) {
       return;
     }
 
     this.spawnMine();
+  }
+
+  private updatePickupSpawning(time: number) {
+    if (time < this.nextPickupSpawnAt) return;
+
+    if (this.pickupGroup.countActive(true) < 2) this.spawnPickup();
+    this.nextPickupSpawnAt = time + Phaser.Math.Between(9_000, 13_000);
   }
 
   private updateClock(time: number) {
@@ -342,6 +612,26 @@ export class OceanScene extends Phaser.Scene {
       this.finish("gameover");
       return;
     }
+
+    const playerLevel = evolutionStageForMass(this.mass).level;
+    const requiredLevel = requiredLevelForSeconds(elapsed);
+    if (playerLevel < requiredLevel) {
+      if (this.pressureDeadlineAt === null) {
+        this.pressureDeadlineAt = time + PRESSURE_GRACE_SECONDS * 1_000;
+        this.announce(`海压升至 LV.${requiredLevel}`);
+        this.cameras.main.flash(180, 255, 118, 94, false);
+      } else if (time >= this.pressureDeadlineAt) {
+        this.lives = 0;
+        this.deathCause = "pressure";
+        this.finish("gameover");
+        return;
+      }
+    } else if (this.pressureDeadlineAt !== null) {
+      this.pressureDeadlineAt = null;
+      this.announce("已适应当前海压");
+    }
+
+    if (time >= this.lastEventUntil) this.lastEvent = null;
 
     this.emitSnapshot();
   }
@@ -371,10 +661,10 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private spawnMine() {
+  private spawnMine(x?: number, y?: number) {
     const placement = this.pickIncomingSchoolPosition();
     const driftSpeed = Phaser.Math.FloatBetween(13, 20);
-    const mine = this.mineGroup.create(placement.x, placement.y, "sea-mine") as SeaMine;
+    const mine = this.mineGroup.create(x ?? placement.x, y ?? placement.y, "sea-mine") as SeaMine;
     mine
       .setDepth(8)
       .setScale(0.28)
@@ -387,6 +677,151 @@ export class OceanScene extends Phaser.Scene {
       });
     const body = mine.body as Phaser.Physics.Arcade.Body;
     body.setSize(mine.width * 0.7, mine.height * 0.86, true);
+  }
+
+  private spawnPickup() {
+    const placement = this.pickIncomingSchoolPosition();
+    const pickupCycle: PickupKind[] = ["shield", "sonar", "frenzy"];
+    const kind = pickupCycle[this.pickupCycleIndex % pickupCycle.length];
+    this.pickupCycleIndex += 1;
+    const driftSpeed = Phaser.Math.FloatBetween(18, 28);
+    const baseScale = 0.3;
+    const pickup = this.pickupGroup.create(
+      placement.x,
+      placement.y,
+      `pickup-${kind}`,
+    ) as OceanPickup;
+    pickup
+      .setDepth(12)
+      .setScale(baseScale)
+      .setData({
+        kind,
+        driftX: Math.cos(placement.direction) * driftSpeed,
+        driftY: Math.sin(placement.direction) * driftSpeed,
+        baseScale,
+        phase: Math.random() * Math.PI * 2,
+        collected: false,
+      });
+    const body = pickup.body as Phaser.Physics.Arcade.Body;
+    body.setCircle(Math.min(pickup.width, pickup.height) * 0.36, undefined, undefined);
+  }
+
+  private spawnCurrentGate(initial: boolean) {
+    if (!this.currentGateGroup || this.currentGateGroup.countActive(true) >= 2) return;
+
+    const angle = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
+    const minimumRadius = initial ? Math.max(300, Math.min(this.scale.width, this.scale.height) * 0.45) : 520;
+    const radius = Phaser.Math.FloatBetween(minimumRadius, minimumRadius + 320);
+    const direction = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
+    const gate = this.add
+      .image(
+        this.player.x + Math.cos(angle) * radius,
+        this.player.y + Math.sin(angle) * radius,
+        "current-gate",
+      )
+      .setDepth(4)
+      .setScale(0.72)
+      .setRotation(direction)
+      .setData({
+        headingX: Math.cos(direction),
+        headingY: Math.sin(direction),
+        phase: Math.random() * Math.PI * 2,
+      });
+    this.currentGateGroup.add(gate);
+  }
+
+  private currentVectorAt(x: number, y: number) {
+    const current = new Phaser.Math.Vector2();
+    if (!this.currentGateGroup) return current;
+
+    for (const child of this.currentGateGroup.getChildren()) {
+      const gate = child as CurrentGate;
+      if (!gate.active) continue;
+      const distance = Phaser.Math.Distance.Between(x, y, gate.x, gate.y);
+      if (distance >= CURRENT_GATE_RADIUS) continue;
+      const strength = 185 * (1 - distance / CURRENT_GATE_RADIUS);
+      current.x += (gate.getData("headingX") as number) * strength;
+      current.y += (gate.getData("headingY") as number) * strength;
+    }
+    return current;
+  }
+
+  private spawnBeacon() {
+    const angle = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
+    const radius = Phaser.Math.FloatBetween(
+      Math.max(420, Math.min(this.scale.width, this.scale.height) * 0.58),
+      Math.max(620, Math.min(this.scale.width, this.scale.height) * 0.82),
+    );
+    this.beacon = this.add
+      .image(
+        this.player.x + Math.cos(angle) * radius,
+        this.player.y + Math.sin(angle) * radius,
+        "bait-beacon",
+      )
+      .setDepth(7)
+      .setScale(0.48);
+    this.beaconExpiresAt = this.time.now + BEACON_DURATION_MS;
+    this.nextBeaconPulseAt = this.time.now + 400;
+    this.announce("诱饵灯塔已点亮");
+    this.emitSnapshot();
+  }
+
+  private spawnBeaconSchool() {
+    if (!this.beacon?.active || this.fishGroup.countActive(true) >= this.maxActiveFish) return;
+
+    const playerLevel = evolutionStageForMass(this.mass).level;
+    const threat = abyssThreatForSeconds((this.time.now - this.startedAt) / 1_000);
+    const dangerChance = 0.2 + threat * 0.28;
+    const level = Math.random() < dangerChance
+      ? Math.min(EVOLUTION_STAGES.length, playerLevel + Phaser.Math.Between(1, 2))
+      : pickEnemyLevel(playerLevel);
+    const remaining = this.maxActiveFish - this.fishGroup.countActive(true);
+    const schoolSize = Math.min(remaining, Phaser.Math.Between(2, 4));
+    const school = ++this.schoolId;
+
+    for (let index = 0; index < schoolSize; index += 1) {
+      const angle = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
+      const radius = Phaser.Math.FloatBetween(180, 320);
+      this.spawnEnemy(
+        this.beacon.x + Math.cos(angle) * radius,
+        this.beacon.y + Math.sin(angle) * radius,
+        level,
+        Phaser.Math.Angle.Between(
+          this.beacon.x + Math.cos(angle) * radius,
+          this.beacon.y + Math.sin(angle) * radius,
+          this.beacon.x,
+          this.beacon.y,
+        ),
+        school,
+      );
+    }
+
+    if (
+      this.mineGroup.countActive(true) < maxMinesForSeconds((this.time.now - this.startedAt) / 1_000) &&
+      Math.random() < 0.1 + threat * 0.18
+    ) {
+      const mineAngle = Phaser.Math.FloatBetween(-Math.PI, Math.PI);
+      this.spawnMine(
+        this.beacon.x + Math.cos(mineAngle) * Phaser.Math.Between(150, 240),
+        this.beacon.y + Math.sin(mineAngle) * Phaser.Math.Between(150, 240),
+      );
+    }
+  }
+
+  private createBeaconPulse() {
+    if (!this.beacon?.active) return;
+    const pulse = this.add
+      .circle(this.beacon.x, this.beacon.y, 26)
+      .setStrokeStyle(3, 0x6ee8ff, 0.72)
+      .setDepth(6);
+    this.tweens.add({
+      targets: pulse,
+      scale: 5.2,
+      alpha: 0,
+      duration: 1_000,
+      ease: "Cubic.Out",
+      onComplete: () => pulse.destroy(),
+    });
   }
 
   private pickInitialSchoolPosition() {
@@ -523,6 +958,35 @@ export class OceanScene extends Phaser.Scene {
     }
   };
 
+  private handlePickupOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _playerObject,
+    targetObject,
+  ) => {
+    const pickup = targetObject as OceanPickup;
+    if (!pickup.active || pickup.getData("collected") || this.status !== "running") return;
+
+    pickup.setData("collected", true);
+    const kind = pickup.getData("kind") as PickupKind;
+    const x = pickup.x;
+    const y = pickup.y;
+    pickup.destroy();
+    this.score += 175;
+
+    if (kind === "shield") {
+      this.shieldCharges = 1;
+      this.announce("气泡护盾已充能");
+    } else if (kind === "sonar") {
+      this.sonarUntil = this.time.now + SONAR_DURATION_MS;
+      this.announce("声呐已标记附近目标");
+    } else {
+      this.frenzyUntil = this.time.now + FRENZY_DURATION_MS;
+      this.announce("狂食状态启动");
+    }
+
+    this.createPickupBurst(x, y, kind);
+    this.emitSnapshot();
+  };
+
   private handleMineOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
     _playerObject,
     targetObject,
@@ -531,6 +995,12 @@ export class OceanScene extends Phaser.Scene {
     if (!mine.active || mine.getData("triggered") || this.status !== "running") return;
 
     mine.setData("triggered", true).setTint(0xff765e);
+    if (this.consumeShield(mine.x, mine.y)) {
+      this.createMineBurst(mine.x, mine.y);
+      mine.destroy();
+      return;
+    }
+
     this.lives = 0;
     this.combo = 0;
     this.deathCause = "mine";
@@ -545,7 +1015,7 @@ export class OceanScene extends Phaser.Scene {
     const y = enemy.y;
     const previousStage = evolutionStageForMass(this.mass);
     this.removeEnemy(enemy, true);
-    this.combo = this.time.now - this.lastEatAt <= COMBO_WINDOW_MS ? this.combo + 1 : 1;
+    this.combo = this.time.now - this.lastEatAt <= this.comboWindowMs ? this.combo + 1 : 1;
     this.lastEatAt = this.time.now;
     this.score += pointsForPrey(this.mass, enemyMass, this.combo);
     this.mass = massAfterEating(this.mass, enemyMass);
@@ -632,6 +1102,20 @@ export class OceanScene extends Phaser.Scene {
 
   private takeDamage(enemy: EnemyFish) {
     if (this.time.now < this.invulnerableUntil) return;
+    if (this.consumeShield(enemy.x, enemy.y)) {
+      this.invulnerableUntil = this.time.now + 650;
+      const retreat = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y)
+        .normalize();
+      enemy.setData({
+        headingX: retreat.x,
+        headingY: retreat.y,
+        retreatUntil: this.time.now + 4_500,
+      });
+      enemy.x += retreat.x * 54;
+      enemy.y += retreat.y * 54;
+      return;
+    }
+
     this.invulnerableUntil = this.time.now + 1_850;
     this.lives -= 1;
     this.cameras.main.shake(200, 0.012);
@@ -668,12 +1152,28 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private consumeShield(x: number, y: number) {
+    if (this.shieldCharges <= 0) return false;
+    this.shieldCharges = 0;
+    this.combo = 0;
+    this.announce("护盾已抵挡致命碰撞");
+    this.cameras.main.shake(130, 0.008);
+    this.createShieldBurst(x, y);
+    this.emitSnapshot();
+    return true;
+  }
+
   private removeEnemy(enemy: EnemyFish, hide = false) {
     const marker = enemy.getData("marker") as Phaser.GameObjects.Arc | undefined;
     marker?.destroy();
     enemy.setData("marker", undefined);
     if (hide) enemy.disableBody(true, true);
     enemy.destroy();
+  }
+
+  private announce(message: string) {
+    this.lastEvent = message;
+    this.lastEventUntil = this.time.now + 2_800;
   }
 
   private createEatBurst(x: number, y: number) {
@@ -692,6 +1192,59 @@ export class OceanScene extends Phaser.Scene {
         onComplete: () => bubble.destroy(),
       });
     }
+  }
+
+  private createPickupBurst(x: number, y: number, kind: PickupKind) {
+    const tint = kind === "shield" ? 0x6ee8ff : kind === "sonar" ? 0xd9f45c : 0xffc15c;
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (index / 8) * Math.PI * 2;
+      const bubble = this.add
+        .image(x, y, "bubble")
+        .setDepth(24)
+        .setTint(tint)
+        .setScale(0.14 + Math.random() * 0.12);
+      this.tweens.add({
+        targets: bubble,
+        x: x + Math.cos(angle) * Phaser.Math.Between(32, 66),
+        y: y + Math.sin(angle) * Phaser.Math.Between(28, 58),
+        alpha: 0,
+        duration: 480 + Math.random() * 180,
+        ease: "Cubic.Out",
+        onComplete: () => bubble.destroy(),
+      });
+    }
+  }
+
+  private createShieldBurst(x: number, y: number) {
+    for (let index = 0; index < 10; index += 1) {
+      const angle = (index / 10) * Math.PI * 2;
+      const bubble = this.add
+        .image(this.player.x, this.player.y, "bubble")
+        .setDepth(26)
+        .setTint(index % 2 === 0 ? 0x6ee8ff : 0xffffff)
+        .setScale(0.17 + Math.random() * 0.12);
+      this.tweens.add({
+        targets: bubble,
+        x: this.player.x + Math.cos(angle) * Phaser.Math.Between(42, 74),
+        y: this.player.y + Math.sin(angle) * Phaser.Math.Between(30, 58),
+        alpha: 0,
+        duration: 360 + Math.random() * 180,
+        ease: "Cubic.Out",
+        onComplete: () => bubble.destroy(),
+      });
+    }
+    const impact = this.add
+      .image(x, y, "bubble")
+      .setDepth(27)
+      .setTint(0x6ee8ff)
+      .setScale(0.7);
+    this.tweens.add({
+      targets: impact,
+      scale: 1.5,
+      alpha: 0,
+      duration: 260,
+      onComplete: () => impact.destroy(),
+    });
   }
 
   private createEvolutionBurst() {
@@ -831,8 +1384,12 @@ export class OceanScene extends Phaser.Scene {
     this.emitSnapshot();
   }
 
+  private get comboWindowMs() {
+    return this.time.now < this.frenzyUntil ? COMBO_WINDOW_MS * 2 : COMBO_WINDOW_MS;
+  }
+
   private get maxActiveFish() {
-    const base = this.scale.width < 620 ? 9 : 11;
+    const base = this.scale.width < 620 ? 11 : 14;
     return this.mode === "rush" ? base + 2 : base;
   }
 
@@ -852,6 +1409,15 @@ export class OceanScene extends Phaser.Scene {
       stageProgress: stageProgressForMass(this.mass),
       lives: this.lives,
       combo: this.combo,
+      shieldCharges: this.shieldCharges,
+      sonarSeconds: Math.max(0, Math.ceil((this.sonarUntil - this.time.now) / 1_000)),
+      frenzySeconds: Math.max(0, Math.ceil((this.frenzyUntil - this.time.now) / 1_000)),
+      requiredLevel: requiredLevelForSeconds(elapsed),
+      pressureSecondsLeft: this.pressureDeadlineAt === null
+        ? null
+        : Math.max(0, Math.ceil((this.pressureDeadlineAt - this.time.now) / 1_000)),
+      threatTier: threatTierForSeconds(elapsed),
+      lastEvent: this.lastEvent,
       timeLeft: this.mode === "rush" ? Math.max(0, RUSH_DURATION_SECONDS - elapsed) : null,
       status: this.status,
       deathCause: this.deathCause,

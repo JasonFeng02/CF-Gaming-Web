@@ -23,6 +23,11 @@ const assets = [
   "fish-tier-13",
   "sea-mine",
   "bubble",
+  "pickup-shield",
+  "pickup-sonar",
+  "pickup-frenzy",
+  "current-gate",
+  "bait-beacon",
 ];
 
 await mkdir(assetDirectory, { recursive: true });

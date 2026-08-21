@@ -483,6 +483,8 @@ a.game-card:hover .game-card-media img {
 
 .hud-vitals,
 .evolution-hud,
+.pressure-hud,
+.powerup-hud,
 .hud-actions {
   position: absolute;
   display: flex;
@@ -540,6 +542,85 @@ a.game-card:hover .game-card-media img {
 
 .hud-time {
   min-width: 42px;
+}
+
+.pressure-hud {
+  position: absolute;
+  top: 140px;
+  left: 16px;
+  display: flex;
+  min-height: 50px;
+  padding: 7px 10px;
+  align-items: center;
+  gap: 8px;
+  color: #9deeff;
+}
+
+.pressure-hud > div {
+  display: grid;
+  min-width: 76px;
+  gap: 1px;
+}
+
+.pressure-hud span {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.pressure-hud strong {
+  color: var(--white);
+  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  font-size: 12px;
+}
+
+.pressure-hud > i {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pressure-hud.critical {
+  border-color: rgba(255, 118, 94, 0.8);
+  color: var(--coral);
+  animation: pressure-alert 0.75s ease-in-out infinite alternate;
+}
+
+.pressure-hud.critical strong {
+  color: #ffb5a7;
+}
+
+.powerup-hud {
+  position: absolute;
+  top: 70px;
+  right: 16px;
+  display: flex;
+  min-height: 42px;
+  padding: 4px;
+  gap: 3px;
+}
+
+.powerup-hud > span {
+  display: inline-flex;
+  width: 48px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.powerup-hud > span.active {
+  color: #072d37;
+  background: #9deeff;
+}
+
+.powerup-hud > span.frenzy {
+  background: #ffd36c;
 }
 
 .evolution-hud {
@@ -661,6 +742,36 @@ a.game-card:hover .game-card-media img {
   font-size: 15px;
   font-weight: 700;
   transform: translateX(-50%);
+}
+
+.ocean-event {
+  position: absolute;
+  z-index: 22;
+  bottom: 22px;
+  left: 50%;
+  min-width: 164px;
+  padding: 9px 14px;
+  border-left: 3px solid var(--lime);
+  border-radius: 3px;
+  color: var(--white);
+  background: rgba(6, 25, 30, 0.84);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: ocean-event-in 0.22s ease-out;
+}
+
+@keyframes pressure-alert {
+  from { background: rgba(65, 24, 25, 0.78); }
+  to { background: rgba(104, 30, 27, 0.92); }
+}
+
+@keyframes ocean-event-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
 }
 
 .game-overlay {
@@ -1199,7 +1310,11 @@ a.game-card:hover .game-card-media img {
   }
 
   .combo-badge {
-    top: 212px;
+    top: 274px;
+  }
+
+  .pressure-hud {
+    top: 210px;
   }
 }
 
@@ -1374,7 +1489,52 @@ a.game-card:hover .game-card-media img {
   }
 
   .combo-badge {
-    top: 174px;
+    top: 226px;
+  }
+
+  .pressure-hud {
+    top: 170px;
+    right: 154px;
+    left: 8px;
+    min-height: 48px;
+    padding: 5px 7px;
+    gap: 6px;
+  }
+
+  .pressure-hud > div {
+    min-width: 0;
+  }
+
+  .pressure-hud > div:first-of-type {
+    flex: 1;
+  }
+
+  .pressure-hud > svg,
+  .pressure-hud > i {
+    display: none;
+  }
+
+  .pressure-hud span {
+    font-size: 8px;
+  }
+
+  .pressure-hud strong {
+    font-size: 10px;
+  }
+
+  .powerup-hud {
+    top: 170px;
+    right: 8px;
+    min-height: 48px;
+  }
+
+  .powerup-hud > span {
+    width: 42px;
+    height: 38px;
+  }
+
+  .ocean-event {
+    bottom: 14px;
   }
 
   .game-intro-overlay h1,

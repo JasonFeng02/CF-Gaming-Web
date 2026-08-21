@@ -4,6 +4,7 @@ import {
   CLASSIC_GOAL_MASS,
   RUSH_GOAL_MASS,
   canEat,
+  abyssThreatForSeconds,
   difficultyForSeconds,
   enemyRarityForLevel,
   evolutionStageForMass,
@@ -13,11 +14,15 @@ import {
   levelForMass,
   massAfterEating,
   massForLevel,
+  maxMinesForSeconds,
+  mineSpawnChanceForSeconds,
   pickEnemyLevel,
   pointsForPrey,
   scaleForMass,
   sameLevelPreyRequired,
   stageProgressForMass,
+  requiredLevelForSeconds,
+  threatTierForSeconds,
 } from "./rules";
 
 describe("ocean growth rules", () => {
@@ -106,5 +111,25 @@ describe("ocean growth rules", () => {
     expect(stageProgressForMass(72)).toBe(0);
     expect(stageProgressForMass(10_000)).toBe(1);
     expect(difficultyForSeconds(999)).toBe(1);
+  });
+
+  it("raises the survival level every 45 seconds and caps it at the final stage", () => {
+    expect(requiredLevelForSeconds(0)).toBe(1);
+    expect(requiredLevelForSeconds(44)).toBe(1);
+    expect(requiredLevelForSeconds(45)).toBe(2);
+    expect(requiredLevelForSeconds(90)).toBe(3);
+    expect(requiredLevelForSeconds(99_999)).toBe(EVOLUTION_STAGES.length);
+  });
+
+  it("makes abyss threats and mines steadily more lethal over time", () => {
+    expect(abyssThreatForSeconds(0)).toBe(0);
+    expect(abyssThreatForSeconds(180)).toBe(0.5);
+    expect(abyssThreatForSeconds(360)).toBe(1);
+    expect(threatTierForSeconds(0)).toBe(1);
+    expect(threatTierForSeconds(360)).toBe(5);
+    expect(mineSpawnChanceForSeconds(360)).toBeGreaterThan(mineSpawnChanceForSeconds(60));
+    expect(maxMinesForSeconds(0)).toBe(1);
+    expect(maxMinesForSeconds(180)).toBe(2);
+    expect(maxMinesForSeconds(360)).toBe(3);
   });
 });
