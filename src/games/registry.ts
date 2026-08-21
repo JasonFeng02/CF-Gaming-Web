@@ -2,6 +2,16 @@ import type { GameDefinition } from "./types";
 
 export const games: GameDefinition[] = [
   {
+    slug: "power-run",
+    title: "战力突围",
+    category: "跑酷 · 数值",
+    description: "穿越五大战区，在数字门、补给与伏击之间壮大小队，挑战钢铁统帅。",
+    cover: "/assets/power-run/power-run-preview.svg",
+    href: "/games/power-run",
+    status: "ready",
+    accent: "#ffd447",
+  },
+  {
     slug: "ocean-growth",
     title: "深海进化",
     category: "生存 · 成长",

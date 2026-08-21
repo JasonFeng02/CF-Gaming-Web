@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130">
+  <defs>
+    <linearGradient id="uniform" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#29cbe8"/>
+      <stop offset="1" stop-color="#1371b8"/>
+    </linearGradient>
+    <linearGradient id="helmet" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#37dcf1"/>
+      <stop offset="1" stop-color="#0877ba"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="50" cy="119" rx="31" ry="8" fill="#071b35" opacity=".22"/>
+  <path d="M28 84 17 113c-2 7 8 11 13 5l20-23 18 24c5 6 15 1 12-6L70 83Z" fill="#123c72"/>
+  <rect x="28" y="57" width="44" height="42" rx="15" fill="url(#uniform)"/>
+  <path d="M34 65h32v11H34z" fill="#f5f9fb" opacity=".95"/>
+  <circle cx="50" cy="40" r="25" fill="#f3b889"/>
+  <path d="M25 38c1-23 13-32 27-32 17 0 28 12 26 34-13-9-38-9-53-2Z" fill="url(#helmet)"/>
+  <path d="M25 38h53c4 0 5 6 1 8H25c-5-1-5-7 0-8Z" fill="#075f9d"/>
+  <circle cx="41" cy="43" r="3.2" fill="#16243b"/>
+  <circle cx="60" cy="43" r="3.2" fill="#16243b"/>
+  <path d="M43 53c5 4 10 4 15 0" fill="none" stroke="#8d472d" stroke-width="3" stroke-linecap="round"/>
+  <path d="m31 68-17 21c-4 6 5 12 10 7l17-17Zm38 0 17 21c4 6-5 12-10 7L59 79Z" fill="#f3b889"/>
+  <path d="M44 62h12l4 15-10 9-10-9Z" fill="#ffd54a"/>
+  <path d="m45 66 5 3 5-3-2 6 4 4-6-1-5 4 1-7Z" fill="#fff"/>
+</svg>

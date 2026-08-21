@@ -10,6 +10,12 @@ const OceanGrowthPage = lazy(() =>
   })),
 );
 
+const PowerRunPage = lazy(() =>
+  import("../games/power-run/PowerRunPage").then((module) => ({
+    default: module.PowerRunPage,
+  })),
+);
+
 export function App() {
   return (
     <div className="app-shell">
@@ -21,6 +27,14 @@ export function App() {
           element={
             <Suspense fallback={<div className="route-loading" aria-label="游戏载入中" />}>
               <OceanGrowthPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/games/power-run"
+          element={
+            <Suspense fallback={<div className="route-loading power-run-loading" aria-label="游戏载入中" />}>
+              <PowerRunPage />
             </Suspense>
           }
         />

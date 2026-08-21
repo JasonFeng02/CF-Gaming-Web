@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#3aaef4"/>
+      <stop offset=".58" stop-color="#aeeeff"/>
+      <stop offset="1" stop-color="#e7fbff"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#64717a"/>
+      <stop offset="1" stop-color="#2f3942"/>
+    </linearGradient>
+    <linearGradient id="blueGate" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#20d5f3"/>
+      <stop offset="1" stop-color="#087cc5"/>
+    </linearGradient>
+    <linearGradient id="greenGate" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#4be8aa"/>
+      <stop offset="1" stop-color="#109c70"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#08213b" flood-opacity=".25"/>
+    </filter>
+    <symbol id="unit" viewBox="0 0 66 88">
+      <ellipse cx="33" cy="80" rx="22" ry="6" fill="#071b35" opacity=".22"/>
+      <path d="m20 58-9 21h15l7-14 8 14h15L45 57Z" fill="#133d70"/>
+      <rect x="18" y="39" width="30" height="28" rx="10" fill="#148bc4"/>
+      <circle cx="33" cy="28" r="16" fill="#f0b486"/>
+      <path d="M17 27C18 10 25 4 34 4c11 0 18 8 18 24-9-6-25-6-35-1Z" fill="#15bde2"/>
+      <path d="M17 27h35v7H17Z" fill="#075f9d"/>
+      <circle cx="28" cy="30" r="2" fill="#15243a"/>
+      <circle cx="39" cy="30" r="2" fill="#15243a"/>
+      <path d="M28 37c3 3 7 3 10 0" fill="none" stroke="#8d472d" stroke-width="2" stroke-linecap="round"/>
+      <path d="M29 44h9l3 10-8 6-7-6Z" fill="#ffd54a"/>
+    </symbol>
+  </defs>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <g fill="#fff" opacity=".78">
+    <ellipse cx="145" cy="130" rx="180" ry="44"/>
+    <ellipse cx="310" cy="106" rx="138" ry="31"/>
+    <ellipse cx="1034" cy="132" rx="210" ry="48"/>
+  </g>
+  <path d="M0 215 218 128l230 97H0Zm1200 0-226-105-252 115h478Z" fill="#38919c" opacity=".44"/>
+  <path d="M490 152h220l430 523H56Z" fill="url(#road)"/>
+  <path d="m490 152 20 4L116 675H56Zm220 0-20 4 392 519h58Z" fill="#fff"/>
+  <path d="M486 158 100 675H66l404-530Zm228 0 386 517h34L730 145Z" fill="#ed4d4d"/>
+  <path d="m570 191 8 1-73 483h-25Zm60 0-8 1 73 483h25Z" fill="#fff" opacity=".58"/>
+  <g filter="url(#shadow)">
+    <g transform="translate(354 244)">
+      <rect width="218" height="154" rx="12" fill="url(#blueGate)" stroke="#e9fbff" stroke-width="7"/>
+      <rect x="12" y="13" width="194" height="18" rx="8" fill="#fff" opacity=".18"/>
+      <text x="109" y="106" fill="#fff" stroke="#075078" stroke-width="6" paint-order="stroke" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="73" font-weight="900">+42</text>
+      <path d="M18 154v97m182-97v97" stroke="#e9fbff" stroke-width="12"/>
+    </g>
+    <g transform="translate(628 244)">
+      <rect width="218" height="154" rx="12" fill="url(#greenGate)" stroke="#e9fff7" stroke-width="7"/>
+      <rect x="12" y="13" width="194" height="18" rx="8" fill="#fff" opacity=".18"/>
+      <text x="109" y="106" fill="#fff" stroke="#086a52" stroke-width="6" paint-order="stroke" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="73" font-weight="900">×2</text>
+      <path d="M18 154v97m182-97v97" stroke="#e9fff7" stroke-width="12"/>
+    </g>
+  </g>
+  <g transform="translate(482 468)" filter="url(#shadow)">
+    <use href="#unit" x="76" y="48" width="66" height="88"/>
+    <use href="#unit" x="144" y="48" width="66" height="88"/>
+    <use href="#unit" x="42" y="86" width="66" height="88"/>
+    <use href="#unit" x="110" y="86" width="66" height="88"/>
+    <use href="#unit" x="178" y="86" width="66" height="88"/>
+    <use href="#unit" x="8" y="124" width="66" height="88"/>
+    <use href="#unit" x="76" y="124" width="66" height="88"/>
+    <use href="#unit" x="144" y="124" width="66" height="88"/>
+    <use href="#unit" x="212" y="124" width="66" height="88"/>
+    <rect x="86" y="4" width="111" height="50" rx="12" fill="#073f69" stroke="#bdf6ff" stroke-width="4"/>
+    <text x="142" y="41" fill="#fff" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="34" font-weight="900">92</text>
+  </g>
+  <g transform="translate(45 464)" filter="url(#shadow)">
+    <rect width="290" height="108" rx="8" fill="#071d35" opacity=".92"/>
+    <text x="26" y="42" fill="#6ee5ff" font-family="Arial Black,sans-serif" font-size="22" font-weight="800">POWER RUN</text>
+    <text x="24" y="84" fill="#fff" font-family="Arial Black,sans-serif" font-size="40" font-weight="900">战力突围</text>
+  </g>
+</svg>

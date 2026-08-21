@@ -284,7 +284,7 @@ a {
 
 .game-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -826,6 +826,359 @@ a.game-card:hover .game-card-media img {
   font-size: 12px;
 }
 
+.power-run-loading {
+  background-color: #73d6f6;
+  background-image: url("/assets/power-run/power-run-preview.svg");
+}
+
+.power-run-page {
+  background: #54bce8;
+}
+
+.power-run-stage {
+  background-color: #75d8f5;
+  background-image: url("/assets/power-run/power-run-preview.svg");
+  background-position: center;
+  background-size: cover;
+}
+
+.power-run-stage .game-canvas-host canvas {
+  cursor: ew-resize;
+}
+
+.power-run-meta .stage-back-link {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(5, 31, 54, 0.78);
+}
+
+.power-run-meta > div {
+  text-shadow: 0 2px 8px rgba(5, 31, 54, 0.75);
+}
+
+.power-run-hud {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  pointer-events: none;
+}
+
+.power-counter,
+.run-progress {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 6px;
+  color: var(--white);
+  background: rgba(5, 31, 54, 0.84);
+  box-shadow: 0 7px 24px rgba(4, 28, 47, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.power-counter {
+  top: 78px;
+  left: 16px;
+  display: flex;
+  min-width: 146px;
+  height: 58px;
+  padding: 7px 13px;
+  align-items: center;
+  gap: 10px;
+  color: #6ee8ff;
+}
+
+.power-counter > div {
+  display: grid;
+  gap: 0;
+}
+
+.power-counter span,
+.run-progress-labels span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.power-counter strong {
+  color: var(--white);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.power-armor {
+  display: flex;
+  margin-top: 4px;
+  gap: 3px;
+}
+
+.power-armor i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.power-armor i.active {
+  background: #76f1d1;
+  box-shadow: 0 0 7px rgba(118, 241, 209, 0.65);
+}
+
+.run-progress {
+  top: 16px;
+  left: 50%;
+  width: min(480px, calc(100% - 560px));
+  min-width: 360px;
+  height: 58px;
+  padding: 8px 14px;
+  transform: translateX(-50%);
+}
+
+.run-progress-labels {
+  display: flex;
+  margin-bottom: 7px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.run-progress-labels strong {
+  color: #ffd64e;
+  font-size: 11px;
+}
+
+.run-progress > i {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.run-progress > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #ffd447;
+  box-shadow: 0 0 12px rgba(255, 212, 71, 0.5);
+}
+
+.run-progress > i svg {
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  color: #ffd447;
+  transform: translateY(-50%);
+}
+
+.power-run-actions {
+  background: rgba(5, 31, 54, 0.84);
+}
+
+.power-run-actions .icon-command:hover {
+  background: #ffd447;
+}
+
+.power-event {
+  position: absolute;
+  z-index: 19;
+  top: 91px;
+  left: 50%;
+  min-width: 178px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 5px;
+  color: #073552;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 20px rgba(4, 28, 47, 0.18);
+  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.power-combo {
+  position: absolute;
+  z-index: 18;
+  top: 136px;
+  left: 50%;
+  padding: 6px 11px;
+  border-radius: 4px;
+  color: #382a05;
+  background: #ffd447;
+  font-size: 11px;
+  font-weight: 800;
+  transform: translateX(-50%);
+}
+
+.power-run-intro {
+  background: rgba(4, 30, 54, 0.34);
+  backdrop-filter: none;
+}
+
+.power-run-intro::before {
+  position: absolute;
+  z-index: -1;
+  width: min(560px, calc(100% - 34px));
+  height: 440px;
+  border-radius: 8px;
+  background: rgba(4, 31, 55, 0.6);
+  box-shadow: 0 24px 60px rgba(3, 26, 45, 0.2);
+  content: "";
+}
+
+.power-run-intro h1 {
+  margin: 0 0 19px;
+  color: var(--white);
+  font-family: "Space Grotesk", "Noto Sans SC", sans-serif;
+  font-size: 46px;
+  line-height: 1.1;
+  text-shadow: 0 4px 0 #0a5d89, 0 9px 24px rgba(3, 24, 42, 0.28);
+}
+
+.power-run-intro .overlay-kicker,
+.power-result .overlay-kicker {
+  color: #ffd447;
+}
+
+.intro-squad {
+  position: relative;
+  display: flex;
+  width: 290px;
+  height: 112px;
+  margin-bottom: 8px;
+  align-items: end;
+  justify-content: center;
+}
+
+.intro-squad img {
+  width: 72px;
+  height: 112px;
+  flex: 0 0 auto;
+  margin-left: -14px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 8px rgba(4, 25, 43, 0.22));
+}
+
+.intro-squad img:first-child {
+  margin-left: 0;
+  transform: scale(0.84) translateY(8px);
+}
+
+.intro-squad img:nth-child(3) {
+  z-index: 2;
+  width: 82px;
+}
+
+.intro-squad img:last-child {
+  transform: scale(0.82) translateY(8px);
+}
+
+.gate-formula {
+  display: grid;
+  width: min(310px, calc(100% - 32px));
+  margin-bottom: 21px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.gate-formula span {
+  display: grid;
+  height: 58px;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: 6px;
+  color: var(--white);
+  background: #11afd3;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 25px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gate-formula span:nth-child(2) {
+  background: #18b57e;
+}
+
+.gate-formula i {
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.power-start-command {
+  color: #19202b;
+  background: #ffd447;
+  box-shadow: 0 6px 0 #d19113, 0 13px 28px rgba(5, 30, 51, 0.24);
+}
+
+.power-start-command:hover {
+  background: #ffe276;
+}
+
+.power-run-pause,
+.power-result {
+  background: rgba(4, 25, 43, 0.78);
+}
+
+.result-emblem {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 14px;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-radius: 50%;
+  color: #153653;
+  background: #ffd447;
+}
+
+.power-result.gameover .result-emblem {
+  color: var(--white);
+  background: var(--coral);
+}
+
+.result-versus {
+  display: grid;
+  width: min(330px, 100%);
+  margin: -7px 0 0;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+}
+
+.result-versus span {
+  display: grid;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.23);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.result-versus small {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 10px;
+}
+
+.result-versus strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 32px;
+}
+
+.result-versus > i {
+  color: #ffd447;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.result-score {
+  margin: 13px 0 22px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+}
+
 @media (min-width: 621px) and (max-width: 1160px) {
   .evolution-hud {
     top: 140px;
@@ -855,7 +1208,7 @@ a.game-card:hover .game-card-media img {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .game-grid .game-card:last-child {
+  .game-grid .game-card:last-child:nth-child(odd) {
     grid-column: 1 / -1;
     width: calc(50% - 9px);
   }
@@ -1043,6 +1396,65 @@ a.game-card:hover .game-card-media img {
 
   .result-overlay > strong {
     font-size: 44px;
+  }
+
+  .power-run-meta > div {
+    display: none;
+  }
+
+  .power-counter {
+    top: 56px;
+    left: 8px;
+    min-width: 124px;
+    height: 51px;
+    padding: 6px 9px;
+  }
+
+  .power-counter strong {
+    font-size: 21px;
+  }
+
+  .run-progress {
+    top: 115px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    min-width: 0;
+    height: 52px;
+    padding: 7px 10px;
+    transform: none;
+  }
+
+  .power-event {
+    top: 177px;
+    max-width: calc(100% - 32px);
+    font-size: 12px;
+  }
+
+  .power-combo {
+    top: 220px;
+  }
+
+  .power-run-intro::before {
+    height: 420px;
+  }
+
+  .power-run-intro h1 {
+    font-size: 38px;
+  }
+
+  .intro-squad {
+    width: 250px;
+    height: 98px;
+  }
+
+  .intro-squad img {
+    width: 62px;
+    height: 98px;
+  }
+
+  .intro-squad img:nth-child(3) {
+    width: 70px;
   }
 }
 

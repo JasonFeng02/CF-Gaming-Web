@@ -14,6 +14,7 @@
     "typecheck": "tsc -b",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:power-run": "vitest run src/games/power-run/core/rules.test.ts",
     "check": "npm run lint && npm run typecheck && npm run test:run && npm run build",
     "cf-typegen": "wrangler types"
   },

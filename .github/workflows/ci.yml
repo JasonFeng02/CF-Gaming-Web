@@ -38,6 +38,9 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      - name: Verify Power Run duration and balance
+        run: npm run test:power-run
+
       - name: Test
         run: npm run test:run
 

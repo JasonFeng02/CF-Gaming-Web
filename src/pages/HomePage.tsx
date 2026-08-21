@@ -13,7 +13,7 @@ export function HomePage() {
       </section>
 
       <section className="featured-game" aria-labelledby="featured-title">
-        <img src={featuredGame.cover} alt="深海中的鱼群与珊瑚" />
+        <img src={featuredGame.cover} alt="" />
         <div className="featured-shade" />
         <div className="featured-content page-width">
           <p className="featured-label">

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 160">
+  <defs>
+    <linearGradient id="armor" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ff675c"/>
+      <stop offset="1" stop-color="#a31f35"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="65" cy="148" rx="42" ry="10" fill="#180b17" opacity=".3"/>
+  <path d="M38 108 25 145h27l13-26 15 26h27l-16-39Z" fill="#272a3c"/>
+  <path d="M30 76c6-18 22-27 35-27 15 0 32 8 37 29l-7 43H36Z" fill="url(#armor)"/>
+  <path d="m34 86-22 28c-5 7 5 14 11 8l24-21Zm64 0 21 28c6 7-5 14-11 8l-25-21Z" fill="#da805d"/>
+  <circle cx="65" cy="42" r="31" fill="#da805d"/>
+  <path d="M32 42C31 17 47 3 66 3c22 0 35 17 33 42L83 34 65 18 47 34Z" fill="#74243a"/>
+  <path d="M31 42h69v11H31Z" fill="#451a2d"/>
+  <path d="M44 45h18l-5 11H42Zm24 0h18l2 11H73Z" fill="#ffd54a"/>
+  <path d="M51 66c9-5 18-5 27 0" fill="none" stroke="#6a2d28" stroke-width="4" stroke-linecap="round"/>
+  <path d="m47 88 18-10 18 10-7 23H54Z" fill="#252839"/>
+  <path d="m65 85 5 9 10 2-7 7 2 10-10-5-10 5 2-10-7-7 10-2Z" fill="#ffcc42"/>
+</svg>
