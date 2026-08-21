@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">深海进化</title>
+  <desc id="desc">明亮水下世界中，一条黄色小鱼穿过不同大小的鱼群</desc>
+  <defs>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#36b9c9"/>
+      <stop offset="0.5" stop-color="#087b9c"/>
+      <stop offset="1" stop-color="#083f5a"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8c873"/>
+      <stop offset="0.55" stop-color="#d4b05d"/>
+      <stop offset="1" stop-color="#e1bd65"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#water)"/>
+  <path d="M130 0h220L730 900H500L130 0Zm430 0h120l300 900H840L560 0Zm420 0h80l200 900h-130L980 0Z" fill="#c4fbf0" opacity=".14"/>
+  <g fill="#baf4e9" opacity=".34">
+    <circle cx="163" cy="195" r="8"/><circle cx="183" cy="153" r="4"/><circle cx="131" cy="244" r="12"/>
+    <circle cx="1362" cy="214" r="9"/><circle cx="1392" cy="175" r="5"/><circle cx="1337" cy="265" r="14"/>
+    <circle cx="758" cy="91" r="7"/><circle cx="790" cy="133" r="11"/>
+  </g>
+  <ellipse cx="800" cy="825" rx="930" ry="190" fill="url(#sand)"/>
+  <path d="M0 795c164-61 309-56 435 13 133 72 293 83 480 29 215-61 443-55 685 17v46H0v-105Z" fill="#9d874b" opacity=".38"/>
+  <g opacity=".72" fill="#0a5260">
+    <path d="M84 819c-11-88 3-161 42-221 8 61 1 132-20 213l-22 8Z"/>
+    <path d="M119 815c16-93 51-158 105-194-9 70-36 134-81 194h-24Z"/>
+    <path d="M1450 829c-5-92 17-165 65-219 0 72-15 142-45 213l-20 6Z"/>
+    <path d="M1400 823c-24-78-23-143 5-195 18 56 23 120 13 192l-18 3Z"/>
+  </g>
+  <g fill="#ff765e">
+    <path d="M235 858c3-68 15-112 38-133 8 36 6 78-6 127l-32 6Z"/>
+    <path d="M262 854c20-58 47-91 81-101-9 40-27 74-53 104l-28-3Z"/>
+    <path d="M1297 858c-5-68-21-111-47-129-6 37-1 79 14 126l33 3Z"/>
+  </g>
+  <g transform="translate(695 405)">
+    <path d="M-142 4c48-58 117-75 207-50 35 10 65 27 90 50-26 24-57 41-93 52-89 27-157 10-204-52Z" fill="#d9f45c"/>
+    <path d="M-132 2c-42-38-75-52-99-40 8 25 23 39 46 44-19 9-31 25-36 47 28 7 58-10 89-51Z" fill="#ff765e"/>
+    <path d="M-25-48c24-43 48-58 72-45 1 26-9 45-29 57l-43-12Z" fill="#72dfcb"/>
+    <path d="M-12 54c25 39 50 50 74 34-2-24-14-41-35-51L-12 54Z" fill="#72dfcb"/>
+    <path d="M-49-52c-1 36 4 72 16 108" fill="none" stroke="#0d7c87" stroke-width="16" opacity=".55"/>
+    <circle cx="103" cy="-10" r="17" fill="#fff"/>
+    <circle cx="110" cy="-9" r="8" fill="#101714"/>
+    <path d="M130 21c-13 9-26 9-39 0" fill="none" stroke="#101714" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(1155 278) scale(.66)">
+    <path d="M-130 0c42-52 102-68 181-45 31 9 58 24 80 45-23 21-50 37-82 47-77 24-137 8-179-47Z" fill="#9fe7dc"/>
+    <path d="M-122 0c-35-31-65-43-88-34 7 23 20 35 41 39-17 9-28 22-32 41 25 5 51-10 79-46Z" fill="#6e8de4"/>
+    <circle cx="86" cy="-9" r="14" fill="#fff"/><circle cx="91" cy="-8" r="7" fill="#101714"/>
+  </g>
+  <g transform="translate(350 270) scale(.45)">
+    <path d="M-130 0c42-52 102-68 181-45 31 9 58 24 80 45-23 21-50 37-82 47-77 24-137 8-179-47Z" fill="#f6e8a9"/>
+    <path d="M-122 0c-35-31-65-43-88-34 7 23 20 35 41 39-17 9-28 22-32 41 25 5 51-10 79-46Z" fill="#ff9f68"/>
+    <circle cx="86" cy="-9" r="14" fill="#fff"/><circle cx="91" cy="-8" r="7" fill="#101714"/>
+  </g>
+  <g transform="translate(1380 535) scale(1.08)">
+    <path d="M-140 0c44-59 107-77 188-51 35 11 65 28 89 51-25 24-56 41-92 52-80 25-142 8-185-52Z" fill="#ff765e"/>
+    <path d="M-132 0c-44-40-78-53-102-39 9 25 25 39 48 43-20 11-31 27-35 49 29 5 58-13 89-53Z" fill="#7c3553"/>
+    <path d="M-19-50c27-45 53-59 79-42-1 26-13 44-36 54l-43-12Z" fill="#7c3553"/>
+    <circle cx="91" cy="-10" r="16" fill="#fff"/><circle cx="98" cy="-9" r="8" fill="#101714"/>
+    <path d="m119 20-26 8 24 9" fill="#fff"/>
+  </g>
+  <g filter="url(#soft)" opacity=".22" fill="#c7fff5">
+    <circle cx="1020" cy="390" r="45"/><circle cx="470" cy="520" r="34"/>
+  </g>
+</svg>

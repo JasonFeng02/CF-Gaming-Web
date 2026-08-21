@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title">
+  <title id="title">明亮的水下沙洲</title>
+  <defs>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#42becd"/>
+      <stop offset="0.52" stop-color="#0b84a3"/>
+      <stop offset="1" stop-color="#0a4e68"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#efd282"/>
+      <stop offset="0.55" stop-color="#d8b766"/>
+      <stop offset="1" stop-color="#e7c46f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#water)"/>
+  <path d="M100 0h250l360 900H480L100 0Zm430 0h150l300 900H830L530 0Zm420 0h95l205 900h-135L950 0Z" fill="#c5fff4" opacity=".16"/>
+  <g fill="#c9fff5" opacity=".28">
+    <circle cx="150" cy="198" r="9"/><circle cx="182" cy="150" r="5"/><circle cx="124" cy="257" r="13"/>
+    <circle cx="1370" cy="225" r="11"/><circle cx="1402" cy="174" r="6"/><circle cx="1338" cy="287" r="15"/>
+    <circle cx="790" cy="118" r="8"/><circle cx="828" cy="164" r="12"/><circle cx="1078" cy="343" r="7"/>
+  </g>
+  <ellipse cx="800" cy="830" rx="940" ry="188" fill="url(#sand)"/>
+  <path d="M0 797c170-58 319-52 448 17 136 72 300 80 492 24 215-62 435-55 660 14v48H0V797Z" fill="#a68c4c" opacity=".34"/>
+  <g fill="#0a5260" opacity=".75">
+    <path d="M68 837c-11-103 6-186 51-249 7 73-2 153-29 241l-22 8Z"/>
+    <path d="M109 830c18-103 58-175 120-216-12 78-45 149-96 216h-24Z"/>
+    <path d="M1432 838c-5-103 20-185 75-246-1 80-19 160-54 239l-21 7Z"/>
+    <path d="M1382 832c-27-89-25-163 6-221 21 63 26 136 14 217l-20 4Z"/>
+  </g>
+  <g fill="#ff765e">
+    <path d="M218 869c3-78 17-129 43-153 10 42 7 90-7 146l-36 7Z"/>
+    <path d="M250 866c23-67 54-105 94-116-11 46-31 85-62 119l-32-3Z"/>
+    <path d="M1307 868c-6-78-24-127-54-148-7 42-2 90 16 144l38 4Z"/>
+  </g>
+</svg>
