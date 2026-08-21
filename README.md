@@ -2,6 +2,8 @@
 
 一个部署在 Cloudflare Workers 上的网页小游戏集合。当前包含首个可玩案例“深海进化”：控制鱼群中的小鱼，吞食更小的目标并避开大型捕食者。
 
+在线体验：[cf-gaming-web.jasonfeng1113.workers.dev](https://cf-gaming-web.jasonfeng1113.workers.dev)
+
 ## 当前界面
 
 ![桌面端游戏界面](./docs/screenshots/desktop-game.png)
