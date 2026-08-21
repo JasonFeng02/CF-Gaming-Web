@@ -2,6 +2,12 @@
 
 一个部署在 Cloudflare Workers 上的网页小游戏集合。当前包含首个可玩案例“深海进化”：控制鱼群中的小鱼，吞食更小的目标并避开大型捕食者。
 
+## 当前界面
+
+![桌面端游戏界面](./docs/screenshots/desktop-game.png)
+
+<img src="./docs/screenshots/mobile-game.png" alt="手机端游戏界面" width="390" />
+
 ## 技术栈
 
 - React + TypeScript：游戏大厅、路由和 HUD
@@ -63,7 +69,7 @@ npm run deploy
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 
-API Token 只授予目标 Cloudflare 账户的 Workers 编辑权限。不要将 Token 写入仓库。PR 会执行 lint、类型检查、测试与生产构建；`main` 分支通过相同门禁后，由 `cloudflare/wrangler-action@v3` 部署。
+API Token 只授予目标 Cloudflare 账户的 Workers 编辑权限。不要将 Token 写入仓库。PR 会执行 lint、类型检查、测试与生产构建；`main` 分支通过相同门禁后执行 `wrangler deploy`。Secrets 尚未配置时，部署步骤会明确跳过，质量门禁仍保持可用。
 
 ## Worker 路由
 
